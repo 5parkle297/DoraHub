@@ -1,0 +1,25 @@
+{
+  "name": "@durahub/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch --experimental-strip-types src/index.ts",
+    "build": "node build.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test --experimental-strip-types --test-reporter=spec test/"
+  },
+  "dependencies": {
+    "@durahub/shared": "*",
+    "@earendil-works/chord": "1.2.0",
+    "@earendil-works/pi-ai": "1.2.0",
+    "@earendil-works/pi-durable": "1.2.0",
+    "@earendil-works/pi-env": "1.2.0",
+    "ws": "8.22.0"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.1",
+    "@types/ws": "8.18.1",
+    "typescript": "5.9.3"
+  }
+}

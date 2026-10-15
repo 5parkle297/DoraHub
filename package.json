@@ -1,0 +1,24 @@
+{
+  "name": "durahub",
+  "version": "0.1.0",
+  "private": true,
+  "description": "DuraHub — cross-device durable agent platform on pi-durable + SQLite + Tailscale",
+  "workspaces": [
+    "packages/*"
+  ],
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "npm run dev -w packages/server",
+    "dev:web": "npm run dev -w packages/web",
+    "build": "npm run build -ws --if-present",
+    "test": "npm test -ws --if-present",
+    "typecheck": "npm run typecheck -ws --if-present"
+  },
+  "allowScripts": {
+    "esbuild@0.25.12": true,
+    "protobufjs@7.6.6": true
+  }
+}
