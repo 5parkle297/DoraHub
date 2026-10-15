@@ -10,3 +10,4 @@ dev-*.sqlite
 !.env.example
 *.log
 .DS_Store
+audit.jsonl
