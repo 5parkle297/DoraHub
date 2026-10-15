@@ -113,8 +113,51 @@ async function main() {
 
   await app.start();
 
+  // 静态托管 web/dist（M3 起）——放在主 router 前面，非 /api /ws 全部回退到静态
+  // 源码运行（src/）与 dist 运行（dist/）相对层级不同，两个候选都探测
+  const webDistCandidates = [
+    join(__dirname, "../../../web/dist"), // src/index.ts 运行 → packages/web/dist
+    join(__dirname, "../../web/dist"),   // dist/index.js 运行 → packages/web/dist
+  ];
+  const webDist = webDistCandidates.find((p) => existsSync(p)) ?? webDistCandidates[0];
+  const serveStatic = existsSync(webDist);
+  const mimeTypes: Record<string, string> = {
+    ".html": "text/html; charset=utf-8",
+    ".js": "text/javascript",
+    ".css": "text/css",
+    ".json": "application/json",
+    ".svg": "image/svg+xml",
+    ".png": "image/png",
+    ".webmanifest": "application/manifest+json",
+    ".ico": "image/x-icon",
+  };
+
   const http = createServer((req, res) => {
-    createRouter({ app, audit, version: VERSION, startedAt: Date.now(), token })(req, res).catch((e) => {
+    const url = new URL(req.url ?? "/", "http://local");
+    const isApi = url.pathname.startsWith("/api/") || url.pathname === "/ws";
+
+    const handle = isApi || !serveStatic
+      ? createRouter({ app, audit, version: VERSION, startedAt: Date.now(), token })(req, res)
+      : (async () => {
+          let filePath = join(webDist, url.pathname === "/" ? "index.html" : url.pathname.slice(1));
+          if (!filePath.startsWith(webDist)) { res.writeHead(403).end(); return; }
+          if (!existsSync(filePath) || !extname(filePath)) filePath = join(webDist, "index.html");
+          try {
+            const body = readFileSync(filePath);
+            const isHtml = extname(filePath) === ".html";
+            const isHashed = /-[A-Za-z0-9_-]{8}\./.test(filePath);
+            res.writeHead(200, {
+              "content-type": mimeTypes[extname(filePath)] ?? "application/octet-stream",
+              // HTML 不缓存（sw/浏览器都别存）；带 hash 的资产可永久缓存
+              "cache-control": isHtml ? "no-cache" : isHashed ? "public, max-age=31536000, immutable" : "no-cache",
+            });
+            res.end(body);
+          } catch {
+            res.writeHead(404).end();
+          }
+        })();
+
+    handle.catch((e) => {
       console.error("[http]", e);
       if (!res.headersSent) {
         res.writeHead(500, { "content-type": "application/json" });
@@ -122,36 +165,6 @@ async function main() {
       }
     });
   });
-
-  // 静态托管 web/dist（M3 起）
-  const webDist = join(__dirname, "../../../web/dist");
-  const serveStatic = existsSync(webDist);
-  if (serveStatic) {
-    http.on("request", (req, res) => {
-      const url = new URL(req.url ?? "/", "http://local");
-      if (url.pathname.startsWith("/api/") || url.pathname === "/ws") return;
-      let filePath = join(webDist, url.pathname === "/" ? "index.html" : url.pathname.slice(1));
-      if (!filePath.startsWith(webDist)) { res.writeHead(403).end(); return; }
-      if (!existsSync(filePath) || !extname(filePath)) filePath = join(webDist, "index.html");
-      const types: Record<string, string> = {
-        ".html": "text/html; charset=utf-8",
-        ".js": "text/javascript",
-        ".css": "text/css",
-        ".json": "application/json",
-        ".svg": "image/svg+xml",
-        ".png": "image/png",
-        ".webmanifest": "application/manifest+json",
-        ".ico": "image/x-icon",
-      };
-      try {
-        const body = readFileSync(filePath);
-        res.writeHead(200, { "content-type": types[extname(filePath)] ?? "application/octet-stream" });
-        res.end(body);
-      } catch {
-        res.writeHead(404).end();
-      }
-    });
-  }
 
   let wsBus: ReturnType<typeof attachWs> | undefined;
   wsBus = attachWs(http, app, audit);
