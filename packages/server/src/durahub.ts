@@ -142,7 +142,7 @@ export class Durahub {
   }
 
   /** 创建会话（HTTP POST /api/conversations）。 */
-  async createConversation(input: { name?: string; cwd?: string; model?: string }) {
+  async createConversation(input: { name?: string; cwd?: string; model?: string; envId?: string }) {
     const conv = await this.harness.createConversation(
       {
         ownership: { kind: "ownerless" },
@@ -151,6 +151,7 @@ export class Durahub {
           // durahub.meta 初始化（tx.doc 拿 Draft，改后提交）
           return tx.doc(ConvMetaDoc, conversationId).then((draft) => {
             draft.name = input.name ?? "";
+            if (input.envId) draft.envId = input.envId;
           });
         },
       },
@@ -170,6 +171,17 @@ export class Durahub {
     }, context);
     const rec = this.convs.get(id);
     if (rec) rec.name = name;
+  }
+
+  /** 改会话目标机（M4）。 */
+  async setEnvId(id: string, envId: string) {
+    const conv = this.getConv(id);
+    if (!conv) throw new Error(`conversation ${id} not found`);
+    await conv.commit((tx) => {
+      return tx.doc(ConvMetaDoc, conv.id).then((draft) => {
+        draft.envId = envId;
+      });
+    }, context);
   }
 
   /** 提交消息（ask/steer）。 */

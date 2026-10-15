@@ -1,19 +1,91 @@
-# 07 · 远程执行环境（exec-agent，M4）
+# 07 · 远程执行环境（M4）
 
-> 目标：会话在 hub，工具（read/bash/edit/write）的**实际执行**在 workpc/laptop。实现 pi-durable 的 ExecutionEnv 接口 + 各机器上的执行代理。
+> 目标：会话在 hub，工具（read/bash/edit/write）的**实际执行**在 workpc/laptop。
 
-## 0. 前置：先验证有没有现成的（V-01）
+## 0. ✅ V-01 已验证：直接采用 @earendil-works/pi-env（2026-10-16，workpc）
 
-博文原文提到 "pi-env's `RemoteExecutionEnv` and `LocalExecutionEnv`"——Pi monorepo 可能已有 `@earendil-works/pi-env` 包。
+`npm view @earendil-works/pi-env` 确认已发布 1.2.0，读其 README/.d.ts 后结论：**不自研 exec-agent，直接采用官方方案**（ADR-005 预留的路径）。
 
-```bash
-npm view @earendil-works/pi-env versions --json
+- `RemoteExecutionEnv`：现成实现，接口与 `NodeExecutionEnv` 完全一致（含可选 `listFiles`）
+- 拓扑：hub 通过 **SSH** 启动远端 daemon（Rust 二进制，包内自带全平台：`bin/pi-env-windows-x64.exe` 等）；`connectSsh(target)` 自动检测远端系统→部署 daemon（SHA-256 校验）→返回 Connection
+- Windows 支持：字符串命令走 Git Bash；argv 直接 exec；检测/部署走 PowerShell——**原 08 §3 的 W-a/W-b/W-c 三方案之争被官方实现解决**（相当于 W-b）
+- 安全：ssh BatchMode + 独立 known_hosts（固定别名）+ 无转发；daemon 部署带哈希验证
+- 懒连接：`sshConnection(target)` 返回懒 Connection，首次操作才连——失败是那次操作的错误，下次重试（正好匹配"workpc 关机时会话工具报错、开机自动恢复"的验收要求）
+
+**与原设计的差异**（回写决策）：
+
+| 项 | 原设计（自研 exec-agent） | 实际（pi-env） |
+|---|---|---|
+| 连接方向 | exec-agent 出站连 hub | hub 出站 SSH 连 exec 端 |
+| 前提 | workpc 只需出站 | workpc 需可入站 SSH（Tailscale SSH 满足，零配置） |
+| 协议 | 自定义 JSONL TCP | pi-env daemon 帧 stdin/stdout over SSH |
+| 白名单 | 自研路径白名单 | 信任边界 = Tailscale SSH 身份 + 独立用户 |
+| 工作量 | 1-2 周 | 集成半天 + 安全收紧 |
+
+剩余自研部分：hub 侧 `buildEnv()` 按 envId 路由 + 会话创建时选机 + `/api/executors`（探测可达性）。原 §2-6 的自研 exec-agent 设计保留在本文末尾作对比叙事（面试素材）。
+
+## 1. 集成架构（实际方案）
+
+```
+hub 进程内                                       workpc（Windows）
+┌─────────────────────┐    Tailscale SSH        ┌──────────────────────┐
+│ buildEnv({envId})   │◄───────────────────────►│ sshd (Tailscale SSH) │
+│  ├ envId=hub        │  自动部署+启动 daemon     │  └ pi-env.exe        │
+│  │  → NodeExecutionEnv                      │    （Git Bash exec）  │
+│  └ envId=workpc     │                         └──────────────────────┘
+│    → RemoteExecutionEnv
+│       connection: sshConnection("workpc")
+│       id: "pi-env:workpc"
+└─────────────────────┘
 ```
 
-- **已发布且接口匹配** → 评估直接用（省一大块），本文档的实现降级为"读过它的源码并能讲清楚"（面试照样有得讲）
-- **未发布/不匹配** → 按下文自研（接口面小，工作量 1-2 天）
+- `sshConnection(target)` 懒连接：workpc 关机时首次工具调用报错，开机后下次调用自动重试成功
+- 会话的 `envId` 存 `durahub.meta` doc（fork: asOf 继承）；`cwd` 是**目标机上的路径**（hub 不解析）
+- hub 侧缓存 `Map<envId, Connection>`；`GET /api/executors` 用轻量探测返回可达性
 
-## 1. pi-durable ExecutionEnv 接口（README ✅）
+## 2. hub 侧实现要点
+
+```ts
+// packages/server/src/exec/registry.ts
+const connections = new Map<string, Connection>();
+
+export function buildEnv(target: EnvTarget): ExecutionEnv {
+  const envId = readEnvId(target); // durahub.meta doc（需要 DocumentReader）
+  if (envId && envId !== "hub") {
+    const conn = connections.get(envId) ?? sshConnection(configFor(envId));
+    return new RemoteExecutionEnv({ connection: conn, id: `pi-env:${envId}`, cwd: target.cwd ?? defaultCwd });
+  }
+  return new NodeExecutionEnv({ cwd: target.cwd ?? DEFAULT_CWD });
+}
+```
+
+EnvTarget 自带 `read: DocumentReader`（1.2.0 新增），可在 env() 里读会话的 durahub.meta doc 拿 envId——不需要全局旁路状态。
+
+## 3. executors 配置
+
+`/etc/durahub/env`（hub）追加：
+
+```
+DURAHUB_EXEC_WORKPC_HOST=workpc            # Tailscale MagicDNS 名
+DURAHUB_EXEC_WORKPC_USER=shiyu             # SSH 用户
+DURAHUB_EXEC_WORKPC_CWD=F:\work            # 默认 cwd
+```
+
+workpc 需开 Tailscale SSH（`tailscale up --ssh` 时代的 Windows 客户端在 GUI 里勾选）；daemon 部署全自动。
+
+## 4. 验收（US-06，更新版）
+
+- [ ] hub 配置 workpc 为 executor（Tailscale SSH 可达）
+- [ ] 创建会话选 envId=workpc → 发"统计 F:\workepo 里 TODO 数" → bash 在 workpc 执行，输出流式回传
+- [ ] 任务中途关 workpc → 工具调用收到明确错误（executor offline），模型能处理并告知用户
+- [ ] workpc 开机后无需任何操作，下一会话自动恢复
+- [ ] 并发：两个会话同时路由到 workpc 互不干扰
+
+---
+
+## 附：原自研 exec-agent 设计（备而不用，保留作对比叙事）
+
+## 附.1 pi-durable ExecutionEnv 接口
 
 自定义环境必须实现（供 CodingTools 的 read/write/edit/bash 调用）：
 

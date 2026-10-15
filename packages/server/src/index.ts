@@ -23,6 +23,7 @@ import { createRouter } from "./http-api.ts";
 import { attachWs } from "./ws.ts";
 import { AuditLog } from "./audit.ts";
 import { createGuardExtension, loadGuardRules, type GuardRules } from "./guard.ts";
+import { ExecRegistry, loadExecutorsFromEnv } from "./exec/registry.ts";
 import { createRegistry } from "@earendil-works/pi-durable";
 import { installZjl } from "./zjl-provider.ts";
 import { createModels } from "@earendil-works/pi-ai";
@@ -68,7 +69,7 @@ async function main() {
   // 但 startHarness 封装了全部装配——这里改为在 startHarness 之外多装一个扩展。
   // 为保持 harness.ts 纯净，guard 在 startHarness 的 options 扩展注入。
 
-  const { harness } = await (async () => {
+  const { harness, execRegistry } = await (async () => {
     // 重新实现 startHarness 的装配以注入 guard（见 harness.ts 注释）
     const { Harness } = await import("@earendil-works/pi-durable");
     const { CodingTools } = await import("@earendil-works/pi-durable/tools");
@@ -88,19 +89,25 @@ async function main() {
     reg.install(CodingTools);
     reg.install(guard); // ← guard 必须进 registry，hooks 才会被调用
 
+    // M4：执行机注册表（envId → pi-env SSH 连接）
+    const execRegistry = new ExecRegistry(loadExecutorsFromEnv(), {
+      hubCwd: cwd,
+      knownHostsFile: process.env.DURAHUB_SSH_KNOWN_HOSTS,
+    });
+
     const h = await Harness.open(
       await openNodeSqliteStorage(dbPath),
       {
         models,
         registry: reg,
-        env: (target: { cwd?: string }) => new NodeExecutionEnv({ cwd: target.cwd ?? cwd }),
+        env: (target, ctx) => execRegistry.build(target, ctx),
         settings: { progress: { partialIntervalMs: 200, outputIntervalMs: 200 } },
         onReport: (e) => console.error("[harness]", e),
       },
       BACKGROUND_CONTEXT,
     );
     h.resume();
-    return { harness: h };
+    return { harness: h, execRegistry };
   })();
 
   // Durahub 应用层 + WS 相互接线
@@ -137,7 +144,7 @@ async function main() {
     const isApi = url.pathname.startsWith("/api/") || url.pathname === "/ws";
 
     const handle = isApi || !serveStatic
-      ? createRouter({ app, audit, version: VERSION, startedAt: Date.now(), token })(req, res)
+      ? createRouter({ app, audit, version: VERSION, startedAt: Date.now(), token, execRegistry })(req, res)
       : (async () => {
           let filePath = join(webDist, url.pathname === "/" ? "index.html" : url.pathname.slice(1));
           if (!filePath.startsWith(webDist)) { res.writeHead(403).end(); return; }
@@ -172,6 +179,8 @@ async function main() {
   http.listen(port, "127.0.0.1", () => {
     console.log(`durahub v${VERSION} on http://127.0.0.1:${port} (behind tailscale serve)`);
     console.log(`  db=${dbPath} model=${modelId} static=${serveStatic} guard=${guardRulesPath} token=${token ? "on" : "off"}`);
+    const execs = execRegistry.list();
+    console.log(`  executors=${execs.length ? execs.map((e) => `${e.envId}(${e.host})`).join(",") : "(hub local only)"}`);
     audit.log("boot", { version: VERSION, pid: process.pid, db: dbPath });
   });
 
@@ -182,6 +191,7 @@ async function main() {
     console.log(`\n${sig} — shutting down…`);
     audit.log("shutdown", { pid: process.pid });
     wsBus?.close();
+    await execRegistry.close().catch(() => {});
     await app.close().catch((e) => console.error("close:", e));
     process.exit(0);
   };

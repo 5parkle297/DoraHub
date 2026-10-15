@@ -5,6 +5,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Durahub } from "./durahub.ts";
 import type { AuditLog } from "./audit.ts";
+import type { ExecRegistry } from "./exec/registry.ts";
 
 export interface HttpApiDeps {
   app: Durahub;
@@ -13,6 +14,8 @@ export interface HttpApiDeps {
   startedAt: number;
   /** funnel 模式的 token；undefined = serve 模式恒通过 */
   token?: string;
+  /** M4：执行机注册表 */
+  execRegistry?: ExecRegistry;
 }
 
 const MAX_BODY = 1 << 20; // 1 MiB
@@ -67,7 +70,7 @@ export function createRouter(deps: HttpApiDeps) {
     if (path === "/api/conversations" && method === "POST") {
       const body = JSON.parse((await readBody(req)).toString("utf8"));
       const conv = await app.createConversation(body);
-      audit.log("create_conversation", { conv: String(conv.id), name: body.name });
+      audit.log("create_conversation", { conv: String(conv.id), name: body.name, envId: body.envId });
       return json(res, 200, { id: String(conv.id) });
     }
 
@@ -119,7 +122,10 @@ export function createRouter(deps: HttpApiDeps) {
         if (typeof body.name === "string" && body.name) {
           await app.setName(convId, body.name);
         }
-        const { name: _n, ...agentChange } = body;
+        if (typeof body.envId === "string" && body.envId) {
+          await app.setEnvId(convId, body.envId);
+        }
+        const { name: _n, envId: _e, ...agentChange } = body;
         if (Object.keys(agentChange).length > 0) {
           await app.configure(convId, agentChange);
         }
@@ -152,6 +158,21 @@ export function createRouter(deps: HttpApiDeps) {
       if (!ok) return err(res, 404, "not_found", "confirmation not pending");
       audit.log("confirmation", { id: confirmMatch[1], approved: body.approved === true });
       return json(res, 200, { ok: true });
+    }
+
+    // ---------- 执行机（M4） ----------
+    if (path === "/api/executors" && method === "GET") {
+      const list = deps.execRegistry?.list() ?? [];
+      const probed = await Promise.all(
+        list.map(async (e) => {
+          const p = await deps.execRegistry!.probe(e.envId);
+          return { ...e, ...p };
+        }),
+      );
+      return json(res, 200, [
+        { envId: "hub", host: "local", defaultCwd: process.cwd(), online: true, lastSeen: Date.now() },
+        ...probed,
+      ]);
     }
 
     return err(res, 404, "not_found", `no route ${method} ${path}`);
