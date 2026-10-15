@@ -1,0 +1,21 @@
+{
+  "$schema": "./guard-rules.schema.json",
+  "bashDeny": [
+    "rm\\s+-rf\\s+/",
+    "rm\\s+-rf\\s+~",
+    "mkfs",
+    "shutdown|reboot|halt\\b",
+    ":\\(\\)\\s*\\{\\s*:\\|:\\s*&\\s*\\};:",
+    "git\\s+push\\s+.*--force",
+    "dd\\s+if=.*of=/dev/",
+    "chmod\\s+-R\\s+777\\s+/",
+    "curl[^|]*\\|\\s*(ba)?sh",
+    "wget[^|]*\\|\\s*(ba)?sh"
+  ],
+  "alwaysAsk": [
+    "git\\s+push",
+    "npm\\s+publish",
+    "sudo\\b"
+  ],
+  "writeOutsideCwd": true
+}

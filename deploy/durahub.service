@@ -1,0 +1,21 @@
+# DuraHub agent server（设计 04 §7）
+[Unit]
+Description=DuraHub agent server (pi-durable + SQLite)
+After=network-online.target tailscaled.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=durahub
+EnvironmentFile=/etc/durahub/env
+WorkingDirectory=/opt/durahub
+ExecStart=/usr/bin/node dist/server/index.js
+StateDirectory=durahub
+Restart=always
+RestartSec=3
+# 崩溃恢复：systemd 拉起 + harness.resume()（设计 02 §3.2）
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

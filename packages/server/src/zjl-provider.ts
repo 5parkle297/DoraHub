@@ -13,27 +13,38 @@ import { stream, streamSimple } from "@earendil-works/pi-ai/api/openai-completio
 export const ZJL_PROVIDER_ID = "zjl";
 
 /** zjl 网关上的模型清单（与 ~/.pi/agent/models.json 保持同步）。 */
-const ZJL_MODELS = [
-  {
-    id: "grok-4.7",
-    name: "grok-4.7",
-    reasoning: true,
-    input: ["text", "image"] as const,
-    contextWindow: 500_000,
-    maxTokens: 8192,
-    thinkingLevelMap: { off: null, minimal: null, low: "low", medium: "medium", high: "high", xhigh: "xhigh", max: null },
-  },
-  {
-    id: "k3",
-    name: "k3 (kimi-k3)",
-    reasoning: true,
-    input: ["text"] as const,
-    contextWindow: 262_144,
-    maxTokens: 32_768,
-    samplingParams: { temperature: 1 },
-    thinkingLevelMap: { off: null, minimal: null, low: "low", medium: "medium", high: "high", xhigh: "xhigh", max: null },
-  },
-] as const;
+interface ZjlModelDef {
+  id: string;
+  name: string;
+  reasoning: boolean;
+  input: ("text" | "image")[];
+  contextWindow: number;
+  maxTokens: number;
+  samplingParams?: { temperature: number };
+  thinkingLevelMap?: Record<string, string | null>;
+}
+
+const ZJL_MODELS: readonly ZjlModelDef[] = [
+    {
+      id: "grok-4.7",
+      name: "grok-4.7",
+      reasoning: true,
+      input: ["text", "image"],
+      contextWindow: 500_000,
+      maxTokens: 8192,
+      thinkingLevelMap: { off: null, minimal: null, low: "low", medium: "medium", high: "high", xhigh: "xhigh", max: null },
+    },
+    {
+      id: "k3",
+      name: "k3 (kimi-k3)",
+      reasoning: true,
+      input: ["text"],
+      contextWindow: 262_144,
+      maxTokens: 32_768,
+      samplingParams: { temperature: 1 },
+      thinkingLevelMap: { off: null, minimal: null, low: "low", medium: "medium", high: "high", xhigh: "xhigh", max: null },
+    },
+  ];
 
 export function zjlProvider(baseUrl: string, apiKey: string) {
   return createProvider({
@@ -65,6 +76,6 @@ export function zjlModelIds(): string[] {
   return ZJL_MODELS.map((m) => m.id);
 }
 
-export function installZjl(models: Models, baseUrl: string, apiKey: string): void {
+export function installZjl(models: import("@earendil-works/pi-ai").MutableModels, baseUrl: string, apiKey: string): void {
   models.setProvider(zjlProvider(baseUrl, apiKey));
 }
