@@ -60,3 +60,24 @@
 
 验证：trial:glm-5.3-flash 直连智谱回复正常；UI 切 trial→zjl:grok-4.7+高思考生效；
 无效 key 的服务器上 UI 显示红警告条（401 令牌已过期）。云端已部署并验收。
+
+## 2026-10-16 深夜更新：前端改造发版（ADR-010）
+
+本次发版内容（workpc 会话完成，本地全量验收后直推）：
+
+- **视觉**：暖纸浅色默认 + prefers-color-scheme 自动深色；设计 token 体系；去边框堆叠
+  （卡片 = 底色分层 + 阴影 + 大圆角）；消息流改 claude.ai 式全宽排版（不再是左右气泡）
+- **markdown 渲染**：自写轻量实现（增量段落策略，流式只重解析尾段）；
+  edit 工具 diff 视图；composer 自动增高
+- **会话管理**：免命名新建（只选 cwd）；AutoNamer 服务端自动命名
+  （trial:glm-5.3-flash 免费渠道，生成 title/description/keywords，节流 + 手动命名保护）；
+  新 WS 帧 conv_meta 实时推送；列表按项目文件夹分组 + 相对时间；列表 API 补 model/cwd；
+  hub root 会话隐藏；ConvMetaDoc v2 migrate 兼容
+- **踩坑**（ADR-010 已记）：viewState().docs 只含 pi.* builtin；自定义 doc 用
+  harness.documentState(token, conv.id, context) 读；conversationId 必须传 handle.id
+
+发版流程同上（git archive 直推 + npm ci + npm run build + systemctl restart）。
+注意：handoff §8 的命令序列里 npm run build 一步不能省（packages/web 的 dist 不入 git）。
+
+验证：线上 /api/conversations 返回自动命名的元数据（云上首条消息 + 描述 + 4 关键词，
+retroactive 补偿对生产旧会话生效）；本地 S1-S5 + ws-test 15/15 全过。
