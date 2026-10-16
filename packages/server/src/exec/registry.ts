@@ -73,16 +73,31 @@ export class ExecRegistry {
         conn = sshConnection(this.targetFor(envId!, cfg)).connection;
         this.connections.set(envId!, conn);
       }
+      // Windows 无 WSL 的解法：显式指定 Git Bash（设计 07 W-b）；不配则
+      // daemon 自探测（Linux/装了 WSL 的机器）。bash 非登录 shell 不读
+      // profile → PATH 缺 Git 的 usr/bin（uname/sed 等 coreutils 不在
+      // Windows PATH）→ shellEnv 注入
+      const shellEnv = this.shellEnvFor(cfg);
       return new RemoteExecutionEnv({
         connection: conn,
         id: `pi-env:${envId}`,
         cwd: target.cwd ?? cfg.defaultCwd,
-        // Windows 无 WSL 时的解法：显式指定 Git Bash（设计 07 W-b）；
-        // 不配则 daemon 自探测（Linux/装了 WSL 的机器）
         ...(cfg.shellPath ? { shellPath: cfg.shellPath } : {}),
+        ...(shellEnv ? { shellEnv } : {}),
       });
     }
     return new NodeExecutionEnv({ cwd: target.cwd ?? this.opts.hubCwd });
+  }
+
+  /** shellPath = .../Git/usr/bin/bash.exe → PATH 前插 Git 的 usr/bin + mingw64/bin（coreutils + git）。 */
+  private shellEnvFor(cfg: ExecutorConfig): Record<string, string> | undefined {
+    if (!cfg.shellPath) return undefined;
+    const m = cfg.shellPath.replace(/\\/g, "/").match(/^(.*\/Git)\/usr\/bin\/bash\.exe$/i);
+    if (!m) return undefined;
+    const gitRoot = m[1];
+    return {
+      PATH: `${gitRoot}/usr/bin;${gitRoot}/mingw64/bin;C:/Windows/System32;C:/Windows;C:/Windows/System32/Wbem`,
+    };
   }
 
   /** 读会话的 dorahub.meta.envId（EnvTarget.read = DocumentReader）。 */
