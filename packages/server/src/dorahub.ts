@@ -16,7 +16,9 @@ import type {
   Submission,
 } from "@earendil-works/pi-durable";
 import { context, defaultAgent } from "./harness.ts";
-import { ConvMetaDoc } from "./conv-meta.ts";
+import { ConvMetaDoc, type ConvMetaState } from "./conv-meta.ts";
+import { AutoNamer, extractUserMessages } from "./auto-namer.ts";
+import type { Models } from "@earendil-works/pi-ai";
 import type { ConversationSummary } from "@dorahub/shared";
 
 export interface DorahubEvents {
@@ -24,6 +26,8 @@ export interface DorahubEvents {
   onEvents(conv: string, events: AgentEvent[]): void;
   /** 会话 running/idle 变化 */
   onStatus(conv: string, status: "running" | "idle"): void;
+  /** 会话元数据变化（自动命名 / 手动改名，handoff §0.5-B） */
+  onMeta(conv: string, meta: { name: string; description: string | null; keywords: string[] }): void;
   /** 确认请求（guard） */
   onConfirmation(conv: string, item: any): void;
   onConfirmationResolved(conv: string, id: string, approved: boolean): void;
@@ -38,6 +42,11 @@ interface ConvRecord {
   pending: Set<(events: AgentEvent[]) => void>;
   lastPreview: string;
   updatedAt: number;
+  /** 元数据（v2 自动命名字段，handoff §0.5-B） */
+  meta: { description: string | null; keywords: string[]; autoNamed: boolean; namedAtUserCount: number };
+  /** agent 配置快照（列表页 model/cwd） */
+  model: string | null;
+  cwd: string | null;
 }
 
 /** 确认等待者 */
@@ -50,19 +59,33 @@ interface ConfirmWaiter {
 export class Dorahub {
   private convs = new Map<string, ConvRecord>();
   private confirmWaiters = new Map<string, ConfirmWaiter>();
+  /** harness root 会话 id（列表隐藏用） */
+  private rootId = "";
 
   public harness: Harness;
   private events: DorahubEvents;
   private opts: { defaultCwd: string; defaultModelId: string };
+  /** 自动命名服务（0.5-B） */
+  public namer: AutoNamer;
 
   constructor(
     harness: Harness,
     events: DorahubEvents,
-    opts: { defaultCwd: string; defaultModelId: string },
+    opts: { defaultCwd: string; defaultModelId: string; models?: Models },
   ) {
     this.harness = harness;
     this.events = events;
     this.opts = opts;
+    this.namer = new AutoNamer(opts.models ?? (harness as any).models, harness);
+    // 自动命名完成 → 更新注册表 + 推帧
+    this.namer.onNamed = (convId, title, description, keywords) => {
+      const rec = this.convs.get(convId);
+      if (rec) {
+        rec.name = title;
+        rec.meta = { description, keywords, autoNamed: true, namedAtUserCount: rec.meta.namedAtUserCount };
+      }
+      this.events.onMeta(convId, { name: title, description, keywords });
+    };
   }
 
   /** 启动：注册 root + 扫描已有会话（重启用）。 */
@@ -70,11 +93,21 @@ export class Dorahub {
     const root = await this.harness.root(context, {
       agent: defaultAgent(this.opts.defaultCwd, this.opts.defaultModelId),
     });
-    await this.track(root, "root");
+    this.rootId = String(root.id); // 内部会话：不出现在列表（0.5-B）
 
     // 枚举 storage 里所有会话（Harness 1.2.0 没有同步 listConversations；
     // 通过 session 的 conversation 表查询——用 harness 的查询接口，见 .d.ts）
     await this.rescan();
+
+    // 补偿：旧会话 retroactive 命名（0.5-B）——有用户消息但缺 description 的会话
+    // 后台异步跑，不阻塞启动
+    setTimeout(() => {
+      for (const rec of this.convs.values()) {
+        if (rec.lastPreview && !rec.meta.description) {
+          this.namer.maybeName(rec.conv);
+        }
+      }
+    }, 5_000).unref?.();
   }
 
   /** 扫描 storage 重建会话注册表（启动/崩溃恢复后调用）。 */
@@ -89,7 +122,7 @@ export class Dorahub {
       }
     }, context);
     for (const id of ids) {
-      if (this.convs.has(id)) continue;
+      if (this.convs.has(id) || id === this.rootId) continue;
       const conv = await this.harness.conversation(id as unknown as ConversationId, context);
       if (conv) await this.track(conv, "");
     }
@@ -100,17 +133,38 @@ export class Dorahub {
     if (this.convs.has(id)) return;
     let name = fallbackName;
     let lastPreview = "";
+    const meta: ConvRecord["meta"] = { description: null, keywords: [], autoNamed: false, namedAtUserCount: 0 };
+    let model: string | null = null;
+    let cwd: string | null = null;
     try {
+      // 自定义 doc 不在 viewState.docs（只有 pi.* builtin）——用 documentState 读（0.5-B 踩坑）
+      const st = await this.harness.documentState(ConvMetaDoc, conv.id, context);
+      const m = st?.value as ConvMetaState | null | undefined;
+      if (m?.name) name = m.name;
+      if (m) {
+        meta.description = m.description ?? null;
+        meta.keywords = m.keywords ?? [];
+        meta.autoNamed = m.autoNamed === true;
+        meta.namedAtUserCount = typeof m.namedAtUserCount === "number" ? m.namedAtUserCount : 0;
+      }
+      // agent 配置（pi.agent doc）
       const view = await conv.viewState(context);
-      const docs = view.value.docs as any;
-      if (docs?.["dorahub.meta"]?.name) name = docs["dorahub.meta"].name;
+      const agent = (view.value.docs as any)?.["pi.agent"];
+      if (agent?.model) {
+        model = `${agent.model.provider ?? "zjl"}:${agent.model.modelId}`;
+      }
+      if (typeof agent?.cwd === "string" && agent.cwd) cwd = agent.cwd;
       // 最后一条 user/assistant entry 做预览
       const entries = view.value.entries ?? [];
       for (let i = entries.length - 1; i >= 0; i--) {
         const e = entries[i] as any;
         if (e.kind === "pi.user" || e.kind === "pi.assistant") {
-          const data = typeof e.data === "string" ? e.data : JSON.stringify(e.data);
-          lastPreview = data.slice(0, 80);
+          const mm = e?.model?.[0];
+          const txt = typeof mm?.content === "string" ? mm.content
+            : Array.isArray(mm?.content)
+              ? mm.content.filter((b: any) => b.type === "text").map((b: any) => b.text ?? "").join("")
+              : typeof e.data === "string" ? e.data : JSON.stringify(e.data ?? "");
+          lastPreview = txt.slice(0, 80);
           break;
         }
       }
@@ -122,19 +176,26 @@ export class Dorahub {
       pending: new Set(),
       lastPreview,
       updatedAt: Date.now(),
+      meta,
+      model,
+      cwd,
     });
   }
 
   listConversations(): ConversationSummary[] {
-    return [...this.convs.values()].map((r) => ({
-      id: String(r.conv.id),
-      name: r.name,
-      status: r.status,
-      model: null,
-      cwd: null,
-      updatedAt: r.updatedAt,
-      lastPreview: r.lastPreview,
-    }));
+    return [...this.convs.values()]
+      .filter((r) => String(r.conv.id) !== this.rootId)
+      .map((r) => ({
+        id: String(r.conv.id),
+        name: r.name,
+        status: r.status,
+        model: r.model,
+        cwd: r.cwd,
+        updatedAt: r.updatedAt,
+        lastPreview: r.lastPreview,
+        description: r.meta.description,
+        keywords: r.meta.keywords,
+      }));
   }
 
   getConv(id: string): Conversation | undefined {
@@ -167,10 +228,17 @@ export class Dorahub {
     await conv.commit((tx) => {
       return tx.doc(ConvMetaDoc, conv.id).then((draft) => {
         draft.name = name;
+        draft.autoNamed = false; // 手动命名后停用自动命名
+        draft.description = draft.description ?? null;
+        draft.keywords = draft.keywords ?? [];
       });
     }, context);
     const rec = this.convs.get(id);
-    if (rec) rec.name = name;
+    if (rec) {
+      rec.name = name;
+      rec.meta.autoNamed = false;
+      this.events.onMeta(id, { name, description: rec.meta.description, keywords: rec.meta.keywords });
+    }
   }
 
   /** 改会话目标机（M4）。 */
@@ -191,7 +259,7 @@ export class Dorahub {
     const rec = this.convs.get(id)!;
     rec.lastPreview = content.slice(0, 80);
     rec.updatedAt = Date.now();
-    return conv.submit(
+    const submission = await conv.submit(
       {
         type: "input",
         content,
@@ -200,6 +268,9 @@ export class Dorahub {
       },
       context,
     );
+    // 自动命名检查（fire-and-forget，0.5-B）
+    this.namer.maybeName(conv);
+    return submission;
   }
 
   async abort(id: string) {
@@ -230,6 +301,18 @@ export class Dorahub {
     return forked;
   }
 
+  /** 重读某会话的 agent 配置（configure 后调用刷新列表页 model/cwd）。 */
+  async refreshAgent(id: string) {
+    const conv = this.getConv(id);
+    if (!conv) return;
+    const rec = this.convs.get(id)!;
+    try {
+      const agent = await conv.agent(context);
+      rec.model = agent.model ? `${agent.model.provider}:${agent.model.modelId}` : null;
+      rec.cwd = agent.cwd ?? null;
+    } catch { /* 忽略 */ }
+  }
+
   /** 拿一次性 snapshot（HTTP GET /snapshot 用，不订阅）。 */
   async snapshot(id: string) {
     const conv = this.getConv(id);
@@ -248,22 +331,27 @@ export class Dorahub {
 
     if (!rec.stream) {
       const es = await watchEvents(this.harness, conv.id, context);
-      // 状态跟踪：run_start/run_end → conv_status
+      // 状态跟踪：run_start/run_end → conv_status；pi.user 落位 → 自动命名检查
       await es.start(async (events) => {
         for (const rec2 of this.convs.values()) {
           if (String(rec2.conv.id) === id) {
             let running = rec2.status;
+            let userAppended = false;
             for (const ev of events) {
               if (ev.type === "run_start") running = "running";
               if (ev.type === "run_end") running = "idle";
               if (ev.type === "submission" && ev.record.status === "done") {
                 rec2.updatedAt = Date.now();
               }
+              if (ev.type === "entry_appended" && (ev.entry as any)?.kind === "pi.user") {
+                userAppended = true;
+              }
             }
             if (running !== rec2.status) {
               rec2.status = running;
               this.events.onStatus(id, running);
             }
+            if (userAppended) this.namer.maybeName(rec2.conv);
             break;
           }
         }

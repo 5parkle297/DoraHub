@@ -26,7 +26,6 @@ export function ConversationPage({ id }: { id: string }) {
   const [agentInfo, setAgentInfo] = useState<{ provider?: string; modelId?: string; thinkingLevel?: string | null }>({});
   const [agentTick, setAgentTick] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
-
   // 首次：HTTP snapshot；随后 WS attach
   useEffect(() => {
     let cancelled = false;
@@ -53,6 +52,9 @@ export function ConversationPage({ id }: { id: string }) {
           navigator.vibrate?.(200);
         } else if (f.t === "confirm_resolved" && f.conv === id) {
           setConfirmations((cs) => cs.filter((c) => c.id !== f.id));
+        } else if (f.t === "conv_meta" && f.conv === id) {
+          // 自动命名完成 → 无刷新换标题（S5）
+          setConvName(f.name);
         }
       },
     });
@@ -82,7 +84,7 @@ export function ConversationPage({ id }: { id: string }) {
   useEffect(() => {
     api.listConversations().then((cs) => {
       const c = cs.find((c) => c.id === id);
-      if (c) setConvName(c.name || `会话 ${id}`);
+      if (c && c.name) setConvName(c.name);
     }).catch(() => {});
     api.snapshot(id).then((snap) => {
       const a = snap?.agent ?? {};

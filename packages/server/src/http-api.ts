@@ -131,6 +131,10 @@ export function createRouter(deps: HttpApiDeps) {
         const { name: _n, envId: _e, ...agentChange } = body;
         if (Object.keys(agentChange).length > 0) {
           await app.configure(convId, agentChange);
+          // model/cwd 变了 → 刷新列表页缓存（0.5-B）
+          if (agentChange.model !== undefined || agentChange.cwd !== undefined) {
+            await app.refreshAgent(convId);
+          }
         }
         audit.log("configure", { conv: convId, change: body });
         return json(res, 200, { ok: true });

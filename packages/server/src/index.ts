@@ -114,9 +114,10 @@ async function main() {
   const app = new Dorahub(harness, {
     onEvents: (conv, events) => wsBus?.onEvents(conv, events),
     onStatus: (conv, status) => wsBus?.onStatus(conv, status),
+    onMeta: (conv, meta) => wsBus?.onMeta(conv, meta),
     onConfirmation: (conv, item) => wsBus?.onConfirmation(conv, item),
     onConfirmationResolved: (conv, id, approved) => wsBus?.onConfirmationResolved(conv, id, approved),
-  }, { defaultCwd: cwd, defaultModelId: modelId });
+  }, { defaultCwd: cwd, defaultModelId: modelId, models });
 
   await app.start();
 

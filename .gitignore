@@ -11,3 +11,5 @@ dev-*.sqlite
 *.log
 .DS_Store
 audit.jsonl
+.dev-env.json
+dev-server.sh

@@ -19,6 +19,10 @@ export interface ConversationSummary {
   cwd: string | null;
   updatedAt: number;
   lastPreview: string | null;
+  /** 自动生成的一句话描述（0.5-B） */
+  description: string | null;
+  /** 自动生成的关键词 chips（0.5-B） */
+  keywords: string[];
 }
 
 export interface CreateConversationRequest {
@@ -87,6 +91,7 @@ export type SrvFrame =
   | { t: "snapshot"; conv: string; snapshot: AgentEventLike } // watchEvents 的 snapshot 事件原样
   | { t: "events"; conv: string; events: AgentEventLike[] }
   | { t: "conv_status"; conv: string; status: "running" | "idle" }
+  | { t: "conv_meta"; conv: string; name: string; description: string | null; keywords: string[] }
   | { t: "confirmation"; conv: string; confirm: ConfirmationItem }
   | { t: "confirm_resolved"; conv: string; id: string; approved: boolean }
   | { t: "pong" }

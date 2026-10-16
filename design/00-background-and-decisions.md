@@ -162,6 +162,26 @@ harness.resume(); // 启动任务调度器，续跑上次未完成的 run
 - **代价**：无（改名发生在任何远端/部署之前）。doc kind `durahub.meta` → `dorahub.meta` 同步更名——旧 dev.sqlite 的会话元数据读不到 name/envId，但 dev 库是可丢弃的测试数据，正式 hub 部署用全新库
 - **候选**（均已否决）：DuraHub（原方案，技术直白但无个性）、pi-fleet、tailagent
 
+### ADR-010：前端设计语言重做 + 自动会话元数据（2026-10-16 前端改造会话）
+
+**背景**：用户否决了旧版视觉（原话：「程序员黑 + 方圆框，很丑，一点都不喜欢」）并提出会话管理核心需求：免命名新建、自动短标题实时更新（对标 Claude Code / Codex）、卡片带 description/关键词、按项目文件夹分组。
+
+**决策 A——视觉**：
+- 默认**暖纸浅色主题**（claude.ai 式 ivory + terracotta 强调色），`prefers-color-scheme` 自动切深色；不提供手动切换开关（v1 先看反馈）
+- 设计 token 体系（CSS variables：色板/字号/间距/圆角/阴影）单一源 `style.css :root`
+- 去边框堆叠：卡片 = 底色分层 + 柔和阴影 + 大圆角，`border` 仅作分隔线用途
+- 仍**不引 UI 组件库**（延续 ADR-003 的自建叙事，但理由更新：项目体量小、设计 token + 手写 CSS 完全可控，引 tailwind/组件库的迁移成本 > 收益）；markdown 渲染同样自写轻量实现（~150 行，增量段落策略：流式时只重解析尾段）
+
+**决策 B——会话元数据**：
+- 新建免命名（弹窗只选 cwd，可直接跳过）
+- 服务端 AutoNamer：首条用户消息后异步调 `trial:glm-5.3-flash`（免费，渠道回退 zjl/plan）生成 `{title, description, keywords[3-5]}`，写 ConvMetaDoc v2（migrate 兼容旧会话）
+- 节流：userCount<=2 必做，之后每 +5 条用户消息刷新；手动 setName 后 autoNamed=false，自动命名不再覆盖手动标题（但仍补 description/keywords）
+- 触发点：submit 后 + 事件流 pi.user entry_appended + 启动时补偿旧会话（retroactive）
+- 推送：新 WS 帧 `conv_meta`，列表页和会话页 header 无刷新换标题
+- 列表 API 填充 model/cwd（从 `pi.agent` doc 读）；hub root 会话从列表隐藏
+
+**踩坑记录**（后续会话必读）：`viewState().docs` 只含 pi.* builtin docs，**自定义 doc（dorahub.meta）要用 `harness.documentState(token, conv.id, context)` 读**，且 conversationId 必须传 Conversation handle 的 id（裸字符串会在类型擦除后运行时报 "requires a conversation ID"）。
+
 ## 6. 待验证项汇总（⚠️ 动手前先跑，结果回写本文档）
 
 | 编号 | 事项 | 验证方法 | 影响的里程碑 | 状态 |

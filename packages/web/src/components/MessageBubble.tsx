@@ -1,11 +1,11 @@
-/** 消息气泡 + thinking 折叠 + 工具卡片挂载（06 §2）。 */
+/** 消息 + thinking 折叠 + 工具卡片挂载（06 §2；0.5-A 重排版：claude.ai 式全宽）。 */
 import { useState } from "react";
 import type { MessageState } from "../state/conv.ts";
 import { ToolCard } from "./ToolCard.tsx";
+import { Markdown } from "./Markdown.tsx";
 
 export function MessageBubble({ msg, tools }: { msg: MessageState; tools: Map<string, any> }) {
   const [showThinking, setShowThinking] = useState(false);
-  const [showRaw, setShowRaw] = useState(false);
 
   if (msg.role === "system") return null;
 
@@ -14,7 +14,7 @@ export function MessageBubble({ msg, tools }: { msg: MessageState; tools: Map<st
     <div className={`msg ${isUser ? "msg-user" : "msg-assistant"}`}>
       <div className="msg-label">{isUser ? "你" : "agent"}</div>
       <div className="msg-body">
-        {msg.thinking && (
+        {msg.thinking && !msg.streaming && (
           <div className="thinking">
             <button className="thinking-toggle" onClick={() => setShowThinking(!showThinking)}>
               {showThinking ? "▾" : "▸"} 思考过程
@@ -22,11 +22,18 @@ export function MessageBubble({ msg, tools }: { msg: MessageState; tools: Map<st
             {showThinking && <pre className="thinking-body">{msg.thinking}</pre>}
           </div>
         )}
-        {msg.text && <div className="msg-text">{msg.text}</div>}
-        {msg.text.startsWith("```") && msg.text.endsWith("```") && (
-          <button className="linklike" onClick={() => setShowRaw(!showRaw)}>{showRaw ? "收起" : "原文"}</button>
+        {msg.thinking && msg.streaming && (
+          <div className="thinking">
+            <button className="thinking-toggle" onClick={() => setShowThinking(!showThinking)}>
+              {showThinking ? "▾" : "▸"} 思考中…
+            </button>
+            {showThinking && <pre className="thinking-body">{msg.thinking}</pre>}
+          </div>
         )}
-        {msg.streaming && <span className="cursor">▍</span>}
+        {msg.text && <Markdown text={msg.text} streaming={msg.streaming} />}
+        {msg.streaming && !msg.text && !msg.thinking && !msg.toolCalls.length && (
+          <span className="cursor">▍</span>
+        )}
         {msg.toolCalls.map((tc) => (
           <ToolCard key={tc.toolCallId} card={tools.get(tc.toolCallId) ?? tc} />
         ))}
