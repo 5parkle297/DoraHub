@@ -46,7 +46,7 @@ export class ExecRegistry {
 
   constructor(
     public executors: Map<string, ExecutorConfig>,
-    private opts: { hubCwd: string; knownHostsFile?: string },
+    private opts: { hubCwd: string; knownHostsFile?: string; identityFile?: string },
   ) {}
 
   private targetFor(envId: string, cfg: ExecutorConfig): import("@earendil-works/pi-env").SshConnectOptions {
@@ -54,6 +54,7 @@ export class ExecRegistry {
       host: cfg.host,
       user: cfg.user,
       port: cfg.port,
+      identityFile: this.opts.identityFile,
       knownHostsFile: this.opts.knownHostsFile ?? "~/.ssh/known_hosts",
       hostKeyAlias: `pi-env-${envId}`,
     };

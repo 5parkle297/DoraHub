@@ -90,9 +90,13 @@ async function main() {
     reg.install(guard); // ← guard 必须进 registry，hooks 才会被调用
 
     // M4：执行机注册表（envId → pi-env SSH 连接）
+    // key 在 /etc/dorahub/id_ed25519；known_hosts 独立文件（服务用户可写，首次连接预扫）
+    const execIdentity = process.env.DORAHUB_EXEC_IDENTITY_FILE ?? "/etc/dorahub/id_ed25519";
+    const execKnownHosts = process.env.DORAHUB_EXEC_KNOWN_HOSTS ?? "/var/lib/dorahub/known_hosts";
     const execRegistry = new ExecRegistry(loadExecutorsFromEnv(), {
       hubCwd: cwd,
-      knownHostsFile: process.env.DORAHUB_SSH_KNOWN_HOSTS,
+      knownHostsFile: execKnownHosts,
+      identityFile: execIdentity,
     });
 
     const h = await Harness.open(
