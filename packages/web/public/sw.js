@@ -1,5 +1,5 @@
 // 极简 service worker：只缓存 App Shell，不碰 /api 与 /ws（06 §1）。
-const CACHE = "durahub-shell-v1";
+const CACHE = "dorahub-shell-v1";
 const SHELL = ["/", "/index.html", "/manifest.webmanifest", "/icon.svg"];
 
 self.addEventListener("install", (e) => {

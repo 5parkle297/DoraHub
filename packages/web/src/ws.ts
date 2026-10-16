@@ -2,7 +2,7 @@
  * WS 单例 + 重连状态机（设计 05 §3、06 §3）。
  * connect → syncing → live；断开指数退避 1s→30s；degraded 轮询由上层处理。
  */
-import type { SrvFrame, CliFrame } from "@durahub/shared";
+import type { SrvFrame, CliFrame } from "@dorahub/shared";
 
 export type ConnState = "connecting" | "live" | "syncing" | "degraded" | "error";
 

@@ -31,7 +31,7 @@ v1 不做（ADR-008）。两套存储不同：pi TUI 是 append-only JSONL（`~/
 MVP 阶段 systemd 最简、可观测性最好（journalctl）。pi-durable 的崩溃恢复需要进程干净退出配合 systemd 拉起，systemd 单元三行搞定（Restart=always）。Docker 化列 M5。
 
 ### Q3：多个模型的 API key 怎么管？
-全走 zjl 中转 = 一个 key 一个 baseURL（V-02 定稿后写死在 /etc/durahub/env）。将来接直连 Anthropic/OpenAI 时，pi-ai 的 models.setProvider 每 provider 一行，key 同样走环境变量。
+全走 zjl 中转 = 一个 key 一个 baseURL（V-02 定稿后写死在 /etc/dorahub/env）。将来接直连 Anthropic/OpenAI 时，pi-ai 的 models.setProvider 每 provider 一行，key 同样走环境变量。
 
 ### Q4：watchEvents 是实验性的，会不会坑？
 事件形态在 05 协议里被裁剪层（events.ts）隔离了一层——就算上游事件结构变了，改动集中在 events.ts 一个文件。这是给 R-01 的结构性缓冲。
@@ -43,7 +43,7 @@ pi-durable 的 task 支持"timers that survive restarts"（官方 ✅）。自�
 单用户 tailnet 流量极小（05 §7 账）。手机流量场景：流式输出文本 + 工具输出，一小时重度使用 < 10MB 量级。
 
 ### Q7：这套东西和 Paseo 的本质区别一句话？
-**Paseo 是"多机遥控器"（agent 留在各机器、客户端去看）；DuraHub 是"云大脑 + 分布式手脚"（会话状态单点在云、执行按需路由到端）**。前者的 daemon 死了 agent 就死；后者崩溃断点续跑。这是简历叙事的核心对比，面试必被问，按这句话答。
+**Paseo 是"多机遥控器"（agent 留在各机器、客户端去看）；DoraHub 是"云大脑 + 分布式手脚"（会话状态单点在云、执行按需路由到端）**。前者的 daemon 死了 agent 就死；后者崩溃断点续跑。这是简历叙事的核心对比，面试必被问，按这句话答。
 
 ## 4. 自由发挥区（M5 之后）
 
@@ -51,4 +51,4 @@ pi-durable 的 task 支持"timers that survive restarts"（官方 ✅）。自�
 - 会话内嵌网页预览（agent 生成的 HTML 直接在 PWA 里 iframe 预览）
 - 多用户（家人/同学共享）：tailnet 邀请 + per-user 会话命名空间
 - 语音输入（Web Speech API，纯前端，半小时就能加上）
-- 和 pi TUI 的桥：durahub 会话里加一个工具直接调本机 pi CLI 处理子任务
+- 和 pi TUI 的桥：dorahub 会话里加一个工具直接调本机 pi CLI 处理子任务

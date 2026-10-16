@@ -1,4 +1,4 @@
-# DuraHub — 跨设备持久化 Agent 平台 · 设计文档
+# DoraHub — 跨设备持久化 Agent 平台 · 设计文档
 
 > **一句话**：会话状态住在云 VM 上（pi-durable + SQLite），网络由 Tailscale 私有组网承载，任何设备（工作电脑 / 移动电脑 / 手机）用浏览器接入同一个 agent 会话；运行中可 steer（转向），进程崩了从断点续跑，工具执行可以路由到指定电脑上执行。
 
@@ -34,7 +34,7 @@
 
 ## 项目命名
 
-仓库建议名 **`durahub`**（durable + hub）。备选：`pi-fleet`、`tailagent`。以下文档统一用 DuraHub 指代本项目。
+仓库名 **`dorahub`**（dora + hub）。原方案 DuraHub（durable + hub）已在 ADR-009 更名：DoraHub 表层是哆啦A梦（猫型机器人 = agent），深层是 backronym **D**urable/**O**bservable/**R**esumable **A**gent hub。文档中早期出现的 "DuraHub" 均指同一项目。
 
 ## 设备与角色速查
 

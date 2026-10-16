@@ -40,7 +40,7 @@ hub 进程内                                       workpc（Windows）
 ```
 
 - `sshConnection(target)` 懒连接：workpc 关机时首次工具调用报错，开机后下次调用自动重试成功
-- 会话的 `envId` 存 `durahub.meta` doc（fork: asOf 继承）；`cwd` 是**目标机上的路径**（hub 不解析）
+- 会话的 `envId` 存 `dorahub.meta` doc（fork: asOf 继承）；`cwd` 是**目标机上的路径**（hub 不解析）
 - hub 侧缓存 `Map<envId, Connection>`；`GET /api/executors` 用轻量探测返回可达性
 
 ## 2. hub 侧实现要点
@@ -50,7 +50,7 @@ hub 进程内                                       workpc（Windows）
 const connections = new Map<string, Connection>();
 
 export function buildEnv(target: EnvTarget): ExecutionEnv {
-  const envId = readEnvId(target); // durahub.meta doc（需要 DocumentReader）
+  const envId = readEnvId(target); // dorahub.meta doc（需要 DocumentReader）
   if (envId && envId !== "hub") {
     const conn = connections.get(envId) ?? sshConnection(configFor(envId));
     return new RemoteExecutionEnv({ connection: conn, id: `pi-env:${envId}`, cwd: target.cwd ?? defaultCwd });
@@ -59,16 +59,16 @@ export function buildEnv(target: EnvTarget): ExecutionEnv {
 }
 ```
 
-EnvTarget 自带 `read: DocumentReader`（1.2.0 新增），可在 env() 里读会话的 durahub.meta doc 拿 envId——不需要全局旁路状态。
+EnvTarget 自带 `read: DocumentReader`（1.2.0 新增），可在 env() 里读会话的 dorahub.meta doc 拿 envId——不需要全局旁路状态。
 
 ## 3. executors 配置
 
-`/etc/durahub/env`（hub）追加：
+`/etc/dorahub/env`（hub）追加：
 
 ```
-DURAHUB_EXEC_WORKPC_HOST=workpc            # Tailscale MagicDNS 名
-DURAHUB_EXEC_WORKPC_USER=shiyu             # SSH 用户
-DURAHUB_EXEC_WORKPC_CWD=F:\work            # 默认 cwd
+DORAHUB_EXEC_WORKPC_HOST=workpc            # Tailscale MagicDNS 名
+DORAHUB_EXEC_WORKPC_USER=shiyu             # SSH 用户
+DORAHUB_EXEC_WORKPC_CWD=F:\work            # 默认 cwd
 ```
 
 workpc 需开 Tailscale SSH（`tailscale up --ssh` 时代的 Windows 客户端在 GUI 里勾选）；daemon 部署全自动。
@@ -76,7 +76,8 @@ workpc 需开 Tailscale SSH（`tailscale up --ssh` 时代的 Windows 客户端�
 ## 4. 验收（US-06，更新版）
 
 - [ ] hub 配置 workpc 为 executor（Tailscale SSH 可达）
-- [ ] 创建会话选 envId=workpc → 发"统计 F:\workepo 里 TODO 数" → bash 在 workpc 执行，输出流式回传
+- [ ] 创建会话选 envId=workpc → 发"统计 F:\work
+epo 里 TODO 数" → bash 在 workpc 执行，输出流式回传
 - [ ] 任务中途关 workpc → 工具调用收到明确错误（executor offline），模型能处理并告知用户
 - [ ] workpc 开机后无需任何操作，下一会话自动恢复
 - [ ] 并发：两个会话同时路由到 workpc 互不干扰
@@ -175,7 +176,7 @@ class RemoteExecutionEnv implements ExecutionEnv {
 
 ```ts
 export function buildEnv({ conversationId, cwd }: { conversationId?: string; cwd?: string }) {
-  // 会话文档里存了 envId（durahub 自定义 doc，fork:"asOf"——分叉继承当时的目标机）
+  // 会话文档里存了 envId（dorahub 自定义 doc，fork:"asOf"——分叉继承当时的目标机）
   const envId = conversationId ? agentDocs.get(conversationId)?.envId : undefined;
   if (envId && envId !== "hub") return new RemoteExecutionEnv(registry, envId);
   return new NodeExecutionEnv({ cwd: cwd ?? DEFAULT_CWD });

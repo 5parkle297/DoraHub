@@ -13,10 +13,10 @@ import { context, defaultAgent, startHarness } from "../packages/server/src/harn
 
 const args = process.argv.slice(2);
 const phase = args[0];
-const dbPath = args.includes("--db") ? args[args.indexOf("--db") + 1] : "/tmp/durahub-crash.sqlite";
+const dbPath = args.includes("--db") ? args[args.indexOf("--db") + 1] : "/tmp/dorahub-crash.sqlite";
 
-const zjlBaseUrl = process.env.ZJL_BASE_URL ?? process.env.DURAHUB_ZJL_BASE_URL;
-const zjlApiKey = process.env.ZJL_API_KEY ?? process.env.DURAHUB_ZJL_API_KEY;
+const zjlBaseUrl = process.env.ZJL_BASE_URL ?? process.env.DORAHUB_ZJL_BASE_URL;
+const zjlApiKey = process.env.ZJL_API_KEY ?? process.env.DORAHUB_ZJL_API_KEY;
 if (!zjlBaseUrl || !zjlApiKey) {
   console.error("need ZJL_BASE_URL and ZJL_API_KEY env");
   process.exit(1);

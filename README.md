@@ -1,4 +1,4 @@
-# DuraHub
+# DoraHub
 
 跨设备持久化 Agent 平台：会话状态住在云 VM 上（pi-durable + SQLite），网络由 Tailscale 私有组网承载，任何设备用浏览器接入同一个 agent 会话。
 
@@ -25,7 +25,7 @@ npm ci
 npm run build              # server(esbuild) + web(vite)
 
 ZJL_BASE_URL=... ZJL_API_KEY=... \
-DURAHUB_DB=./dev.sqlite DURAHUB_CWD=$PWD \
+DORAHUB_DB=./dev.sqlite DORAHUB_CWD=$PWD \
 node packages/server/dist/index.js
 
 # 浏览器打开 http://127.0.0.1:8787
@@ -50,7 +50,7 @@ node scripts/crash-test.ts     # M1 崩溃恢复演练（phase1 SIGKILL / phase2
 
 ## 部署（hub VM）
 
-见 `deploy/`：`durahub.service`（systemd）+ `deploy.sh`（pull → build → restart → health check）。
+见 `deploy/`：`dorahub.service`（systemd）+ `deploy.sh`（pull → build → restart → health check）。
 
 hub 只听 `127.0.0.1:8787`，唯一入口 `tailscale serve`（零公网暴露、自动 TLS）。
 
@@ -69,7 +69,7 @@ hub 只听 `127.0.0.1:8787`，唯一入口 `tailscale serve`（零公网暴露�
 ```
 design/          设计文档（00-12，项目的 single source of truth）
 packages/shared  协议类型（HTTP + WS 帧）
-packages/server  hub：harness 装配、Durahub 应用层、HTTP/WS、guard、exec registry
+packages/server  hub：harness 装配、Dorahub 应用层、HTTP/WS、guard、exec registry
 packages/web     PWA：React 18 + Vite，无 UI 库
 deploy/          systemd + 部署脚本
 scripts/         验收测试与试玩脚本

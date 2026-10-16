@@ -154,7 +154,13 @@ harness.resume(); // 启动任务调度器，续跑上次未完成的 run
 
 ### ADR-008：不迁移、不接管 pi TUI 旧会话（`~/.pi/agent/sessions/*.jsonl`）
 - **理由**：两套存储模型不同，强行桥接（解析 JSONL 重放进 durable conversation）工作量大、收益边际
-- **含义**：日常 pi TUI 用法不变；DuraHub 是新建的独立平台。旧会话导入器列为 M5 可选加分项（JSONL 格式有官方文档 session-format.md，技术可行）
+- **含义**：日常 pi TUI 用法不变；DoraHub 是新建的独立平台。旧会话导入器列为 M5 可选加分项（JSONL 格式有官方文档 session-format.md，技术可行）
+
+### ADR-009：项目更名 DuraHub → DoraHub（2026-10-16）
+- **背景**：命名阶段（GitHub 远端未建，改名零成本）。用户偏好俏皮/二次元风格但保留技术含义
+- **决策**：**DoraHub**（dora + hub）。表层 = 哆啦A梦（猫型机器人 = agent 的隐喻，道具宇宙可映射全部 demo 剧本：任意门=跨设备同会话、时光机=崩溃恢复、四次元口袋=远程执行路由、铃铛=guard 确认）；深层 backronym = **D**urable, **O**bservable, **R**esumable **A**gent hub——恰好是本项目三大技术支柱。且 Dora ≈ Dura，原 durable 含义若隐若现
+- **代价**：无（改名发生在任何远端/部署之前）。doc kind `durahub.meta` → `dorahub.meta` 同步更名——旧 dev.sqlite 的会话元数据读不到 name/envId，但 dev 库是可丢弃的测试数据，正式 hub 部署用全新库
+- **候选**（均已否决）：DuraHub（原方案，技术直白但无个性）、pi-fleet、tailagent
 
 ## 6. 待验证项汇总（⚠️ 动手前先跑，结果回写本文档）
 

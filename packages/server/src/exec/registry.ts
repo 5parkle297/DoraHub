@@ -3,8 +3,8 @@
  * envId → pi-env SSH 连接的注册表 + buildEnv 路由。
  *
  * 用法：
- *   DURAHUB_EXEC_WORKPC_HOST / DURAHUB_EXEC_WORKPC_USER / DURAHUB_EXEC_WORKPC_CWD
- *   等环境变量按 envId 大写声明执行机；会话 durahub.meta.envId 选中后，
+ *   DORAHUB_EXEC_WORKPC_HOST / DORAHUB_EXEC_WORKPC_USER / DORAHUB_EXEC_WORKPC_CWD
+ *   等环境变量按 envId 大写声明执行机；会话 dorahub.meta.envId 选中后，
  *   env() 在这里拿到 RemoteExecutionEnv（懒连接：首次操作才 ssh）。
  */
 import type { Context } from "@earendil-works/chord";
@@ -21,14 +21,14 @@ export interface ExecutorConfig {
   defaultCwd: string;
 }
 
-/** 从环境变量扫描执行机：DURAHUB_EXEC_<ENVID>_HOST 等。 */
+/** 从环境变量扫描执行机：DORAHUB_EXEC_<ENVID>_HOST 等。 */
 export function loadExecutorsFromEnv(): Map<string, ExecutorConfig> {
   const out = new Map<string, ExecutorConfig>();
   for (const [key, value] of Object.entries(process.env)) {
-    const m = key.match(/^DURAHUB_EXEC_([A-Z0-9_]+)_HOST$/);
+    const m = key.match(/^DORAHUB_EXEC_([A-Z0-9_]+)_HOST$/);
     if (!m || !value) continue;
     const envId = m[1].toLowerCase();
-    const prefix = `DURAHUB_EXEC_${m[1]}`;
+    const prefix = `DORAHUB_EXEC_${m[1]}`;
     out.set(envId, {
       host: value,
       user: process.env[`${prefix}_USER`],
@@ -78,7 +78,7 @@ export class ExecRegistry {
     return new NodeExecutionEnv({ cwd: target.cwd ?? this.opts.hubCwd });
   }
 
-  /** 读会话的 durahub.meta.envId（EnvTarget.read = DocumentReader）。 */
+  /** 读会话的 dorahub.meta.envId（EnvTarget.read = DocumentReader）。 */
   private async readEnvId(target: EnvTarget, context: Context): Promise<string | null | undefined> {
     try {
       const meta = await target.read.snapshot(ConvMetaDoc, target.conversationId as ConversationId, context);

@@ -7,7 +7,7 @@
 **前置**：M3 完成，workpc 浏览器 + 手机 PWA 已登录。
 
 ```
-1. [workpc 浏览器] 打开 DuraHub → 新建会话"重构调研"
+1. [workpc 浏览器] 打开 DoraHub → 新建会话"重构调研"
    发送："帮我调研 WebSocket 重连的几种策略，先列要点"
 2. [录屏切手机] PWA 打开 → 会话列表点进"重构调研"
    → 看到正在流式输出的回答（逐字出现）
@@ -32,7 +32,7 @@
 
 ```
 1. [配置] guard-rules.json 已含 bash 危险规则（如 rm -rf）
-2. [workpc] 发送："帮我执行 rm -rf /tmp/durahub-test-dir 清理测试目录"
+2. [workpc] 发送："帮我执行 rm -rf /tmp/dorahub-test-dir 清理测试目录"
 3. 工具卡片变为"等待确认"（红边），同时 [手机] 震动 + 置顶确认卡
 4. [手机] 点"允许" → workpc 侧工具继续执行完成
 5. （重复一遍点"拒绝"的分支，验证 block 消息回到模型）
@@ -43,7 +43,7 @@
 
 ```
 1. [手机] 发起会跑 5+ 轮工具的任务："逐个文件检查 src/ 里的 TODO 并汇总"
-2. [workpc SSH] 任务跑到第 3 轮时：sudo systemctl kill -s SIGKILL durahub
+2. [workpc SSH] 任务跑到第 3 轮时：sudo systemctl kill -s SIGKILL dorahub
 3. [手机] WS 断开提示（黄条）→ 几秒后自动重连（绿条）
 4. hub systemd 拉起 → harness.resume() → 任务从断点继续
 5. 最终汇总结果完整产出；对比 sqlite 里 transcript：被中断的工具调用

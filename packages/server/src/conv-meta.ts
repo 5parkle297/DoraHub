@@ -1,5 +1,5 @@
 /**
- * 会话元数据（durahub 自定义 doc，设计 04 §5 / 07 §4）。
+ * 会话元数据（dorahub 自定义 doc，设计 04 §5 / 07 §4）。
  * name 供列表页展示；fork 语义继承当时的目标机（M4 envId）。
  */
 import { defineDoc } from "@earendil-works/pi-durable";
@@ -14,7 +14,7 @@ export interface ConvMetaState extends JsonObject {
 }
 
 export const ConvMetaDoc: RewindableConversationDocToken<ConvMetaState> = defineDoc({
-  kind: "durahub.meta",
+  kind: "dorahub.meta",
   version: 1,
   scope: "conversation",
   history: "rewindable",

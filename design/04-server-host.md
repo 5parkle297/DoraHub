@@ -3,7 +3,7 @@
 ## 1. 模块划分
 
 ```
-durahub/
+dorahub/
   src/server/
     index.ts          # 入口：装配一切、启动监听 127.0.0.1:8787
     harness.ts        # Harness 装配（storage/registry/models/env/settings）
@@ -52,7 +52,7 @@ const env = (input: { conversationId?: string; cwd?: string }) =>
 // —— 每会话可覆盖的默认 agent
 const defaultAgent = {
   model: { provider: "zjl", modelId: "grok-4.7" },  // V-02 已验证（2026-10-16）；zjl 网关未开通 glm
-  cwd: "/root/durahub-workspace",
+  cwd: "/root/dorahub-workspace",
 };
 
 export async function startHarness(dbPath: string) {
@@ -131,7 +131,7 @@ pi-durable 的 hook 机制实现（API 出自 README ✅）：
 
 ```ts
 const Guard = defineExtension({
-  name: "durahub-guard",
+  name: "dorahub-guard",
   hooks: [
     hook(ToolTask, {
       beforeTool: async (call, api, ctx) => {
@@ -157,7 +157,7 @@ const Guard = defineExtension({
 ## 6. 启动序列（index.ts 伪码）
 
 ```ts
-const harness = await startHarness("/var/lib/durahub/agent.sqlite");
+const harness = await startHarness("/var/lib/dorahub/agent.sqlite");
 const execRegistry = new ExecRegistry();            // M4
 const server = http.createServer(router(harness, execRegistry));
 const wss = new WebSocketServer({ noServer: true });
@@ -170,19 +170,19 @@ audit.log("boot", { version, pid: process.pid });
 ## 7. systemd 单元
 
 ```ini
-# /etc/systemd/system/durahub.service
+# /etc/systemd/system/dorahub.service
 [Unit]
-Description=DuraHub agent server
+Description=DoraHub agent server
 After=network-online.target tailscaled.service
 Wants=network-online.target
 
 [Service]
 Type=simple
-User=durahub
-EnvironmentFile=/etc/durahub/env          # ZJL_BASE_URL / ZJL_API_KEY（0600 root）
-WorkingDirectory=/opt/durahub
+User=dorahub
+EnvironmentFile=/etc/dorahub/env          # ZJL_BASE_URL / ZJL_API_KEY（0600 root）
+WorkingDirectory=/opt/dorahub
 ExecStart=/usr/bin/node dist/server/index.js
-StateDirectory=durahub                    # /var/lib/durahub
+StateDirectory=dorahub                    # /var/lib/dorahub
 Restart=always
 RestartSec=3
 # 崩溃恢复的关键就是这两行 + harness.resume()
@@ -194,19 +194,19 @@ WantedBy=multi-user.target
 ```
 
 ```bash
-sudo systemctl daemon-reload && sudo systemctl enable --now durahub
-journalctl -u durahub -f                   # 实时日志
+sudo systemctl daemon-reload && sudo systemctl enable --now dorahub
+journalctl -u dorahub -f                   # 实时日志
 ```
 
 ## 8. 审计日志
 
-`/var/lib/durahub/audit.jsonl`（append-only，一行一 JSON）：`{ts, event: boot|connect|submit|steer|abort|confirmation|tool_blocked, conv, client, detail}`。工具级审计不需要单独做——pi-durable 的 transcript 本身就是全量审计（每个 tool call 的 intent 先落盘再执行 ✅）。
+`/var/lib/dorahub/audit.jsonl`（append-only，一行一 JSON）：`{ts, event: boot|connect|submit|steer|abort|confirmation|tool_blocked, conv, client, detail}`。工具级审计不需要单独做——pi-durable 的 transcript 本身就是全量审计（每个 tool call 的 intent 先落盘再执行 ✅）。
 
 ## 9. 安全清单
 
 - [ ] server 只听 `127.0.0.1`（serve 转发是唯一入口）
 - [ ] API key 走 EnvironmentFile，不进 git 不进代码
-- [ ] SQLite 与 audit 属主 durahub:0600
+- [ ] SQLite 与 audit 属主 dorahub:0600
 - [ ] 模式 B（funnel）开启时 token 中间件强制启用（auth.ts），否则 500 拒绝启动（fail-closed）
 - [ ] WS 帧大小上限 1MiB；消息长度上限 64KiB
-- [ ] systemd 加 `ProtectSystem=strict` + `ReadWritePaths=/var/lib/durahub`（M5 收紧）
+- [ ] systemd 加 `ProtectSystem=strict` + `ReadWritePaths=/var/lib/dorahub`（M5 收紧）

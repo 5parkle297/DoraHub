@@ -1,5 +1,5 @@
 {
-  "name": "@durahub/server",
+  "name": "@dorahub/server",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -10,7 +10,7 @@
     "test": "node --test --experimental-strip-types --test-reporter=spec test/"
   },
   "dependencies": {
-    "@durahub/shared": "*",
+    "@dorahub/shared": "*",
     "@earendil-works/chord": "1.2.0",
     "@earendil-works/pi-ai": "1.2.0",
     "@earendil-works/pi-durable": "1.2.0",

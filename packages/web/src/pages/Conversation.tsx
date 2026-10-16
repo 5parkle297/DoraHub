@@ -8,7 +8,7 @@ import { MessageBubble } from "../components/MessageBubble.tsx";
 import { Composer } from "../components/Composer.tsx";
 import { ConfirmationCard } from "../components/ConfirmationCard.tsx";
 import { InboxBar } from "../components/Inbox.tsx";
-import type { ConfirmationItem } from "@durahub/shared";
+import type { ConfirmationItem } from "@dorahub/shared";
 
 export function ConversationPage({ id }: { id: string }) {
   const [state, dispatch] = useReducer(

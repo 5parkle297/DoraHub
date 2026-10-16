@@ -1,5 +1,5 @@
 /**
- * DuraHub — zjl provider 装配（pi-ai createProvider + openai-completions）。
+ * DoraHub — zjl provider 装配（pi-ai createProvider + openai-completions）。
  *
  * V-02 验证结论（2026-10-16，workpc）：
  * - pi-ai 1.2.0 的 `createProvider()` 接受 baseUrl/apiKey/models/api，
@@ -54,7 +54,7 @@ export function zjlProvider(baseUrl: string, apiKey: string) {
     auth: {
       apiKey: {
         name: "zjl API key",
-        resolve: async () => ({ auth: { apiKey }, source: "DURAHUB_ZJL_API_KEY" }),
+        resolve: async () => ({ auth: { apiKey }, source: "DORAHUB_ZJL_API_KEY" }),
       },
     },
     models: ZJL_MODELS.map((m) => ({

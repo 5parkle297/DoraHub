@@ -1,5 +1,5 @@
 /** 待确认卡片（US-05）：红边置顶 + 允许/拒绝。 */
-import type { ConfirmationItem } from "@durahub/shared";
+import type { ConfirmationItem } from "@dorahub/shared";
 
 export function ConfirmationCard({
   item,

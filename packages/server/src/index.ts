@@ -1,24 +1,24 @@
 /**
- * DuraHub server 入口（设计 04 §6）。
- * 装配：harness → Durahub 应用层 → HTTP API + WS + 静态托管 web/dist。
+ * DoraHub server 入口（设计 04 §6）。
+ * 装配：harness → Dorahub 应用层 → HTTP API + WS + 静态托管 web/dist。
  * 永远只听 127.0.0.1（安全基线，03 §2）——唯一入口是 tailscale serve。
  *
  * 环境变量：
- *   DURAHUB_DB            sqlite 路径（默认 /var/lib/durahub/agent.sqlite；开发 ./dev.sqlite）
- *   DURAHUB_CWD           默认 agent 工作目录
- *   DURAHUB_MODEL         默认模型 id（默认 grok-4.7）
- *   DURAHUB_PORT          监听端口（默认 8787）
+ *   DORAHUB_DB            sqlite 路径（默认 /var/lib/dorahub/agent.sqlite；开发 ./dev.sqlite）
+ *   DORAHUB_CWD           默认 agent 工作目录
+ *   DORAHUB_MODEL         默认模型 id（默认 grok-4.7）
+ *   DORAHUB_PORT          监听端口（默认 8787）
  *   ZJL_BASE_URL          zjl 中转 baseURL（V-02）
  *   ZJL_API_KEY           zjl key
- *   DURAHUB_TOKEN         funnel 模式 token；设置则强制校验（fail-closed）
- *   DURAHUB_GUARD_RULES   guard-rules.json 路径（默认 ./guard-rules.json）
+ *   DORAHUB_TOKEN         funnel 模式 token；设置则强制校验（fail-closed）
+ *   DORAHUB_GUARD_RULES   guard-rules.json 路径（默认 ./guard-rules.json）
  */
 import { createServer } from "node:http";
 import { existsSync, readFileSync } from "node:fs";
 import { join, dirname, extname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { startHarness } from "./harness.ts";
-import { Durahub } from "./durahub.ts";
+import { Dorahub } from "./dorahub.ts";
 import { createRouter } from "./http-api.ts";
 import { attachWs } from "./ws.ts";
 import { AuditLog } from "./audit.ts";
@@ -35,12 +35,12 @@ const VERSION = "0.1.0";
 
 async function main() {
   const isDev = process.env.NODE_ENV !== "production";
-  const dbPath = process.env.DURAHUB_DB ?? (isDev ? "./dev.sqlite" : "/var/lib/durahub/agent.sqlite");
-  const port = Number(process.env.DURAHUB_PORT ?? 8787);
-  const cwd = process.env.DURAHUB_CWD ?? process.cwd();
-  const modelId = process.env.DURAHUB_MODEL ?? "grok-4.7";
-  const token = process.env.DURAHUB_TOKEN || undefined;
-  const guardRulesPath = process.env.DURAHUB_GUARD_RULES ?? join(__dirname, "../../../guard-rules.json");
+  const dbPath = process.env.DORAHUB_DB ?? (isDev ? "./dev.sqlite" : "/var/lib/dorahub/agent.sqlite");
+  const port = Number(process.env.DORAHUB_PORT ?? 8787);
+  const cwd = process.env.DORAHUB_CWD ?? process.cwd();
+  const modelId = process.env.DORAHUB_MODEL ?? "grok-4.7";
+  const token = process.env.DORAHUB_TOKEN || undefined;
+  const guardRulesPath = process.env.DORAHUB_GUARD_RULES ?? join(__dirname, "../../../guard-rules.json");
 
   const zjlBaseUrl = process.env.ZJL_BASE_URL;
   const zjlApiKey = process.env.ZJL_API_KEY;
@@ -49,7 +49,7 @@ async function main() {
     process.exit(1);
   }
 
-  const audit = new AuditLog(process.env.DURAHUB_AUDIT ?? join(dirname(dbPath), "audit.jsonl"));
+  const audit = new AuditLog(process.env.DORAHUB_AUDIT ?? join(dirname(dbPath), "audit.jsonl"));
 
   // guard 规则（可选文件；缺省用内置保守规则）
   let rules: GuardRules;
@@ -92,7 +92,7 @@ async function main() {
     // M4：执行机注册表（envId → pi-env SSH 连接）
     const execRegistry = new ExecRegistry(loadExecutorsFromEnv(), {
       hubCwd: cwd,
-      knownHostsFile: process.env.DURAHUB_SSH_KNOWN_HOSTS,
+      knownHostsFile: process.env.DORAHUB_SSH_KNOWN_HOSTS,
     });
 
     const h = await Harness.open(
@@ -110,8 +110,8 @@ async function main() {
     return { harness: h, execRegistry };
   })();
 
-  // Durahub 应用层 + WS 相互接线
-  const app = new Durahub(harness, {
+  // Dorahub 应用层 + WS 相互接线
+  const app = new Dorahub(harness, {
     onEvents: (conv, events) => wsBus?.onEvents(conv, events),
     onStatus: (conv, status) => wsBus?.onStatus(conv, status),
     onConfirmation: (conv, item) => wsBus?.onConfirmation(conv, item),
@@ -177,7 +177,7 @@ async function main() {
   wsBus = attachWs(http, app, audit);
 
   http.listen(port, "127.0.0.1", () => {
-    console.log(`durahub v${VERSION} on http://127.0.0.1:${port} (behind tailscale serve)`);
+    console.log(`dorahub v${VERSION} on http://127.0.0.1:${port} (behind tailscale serve)`);
     console.log(`  db=${dbPath} model=${modelId} static=${serveStatic} guard=${guardRulesPath} token=${token ? "on" : "off"}`);
     const execs = execRegistry.list();
     console.log(`  executors=${execs.length ? execs.map((e) => `${e.envId}(${e.host})`).join(",") : "(hub local only)"}`);

@@ -1,6 +1,6 @@
 {
-  "name": "DuraHub",
-  "short_name": "DuraHub",
+  "name": "DoraHub",
+  "short_name": "DoraHub",
   "description": "跨设备持久化 Agent 平台",
   "start_url": "/",
   "display": "standalone",

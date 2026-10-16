@@ -3,10 +3,10 @@
 ## 1. 目录结构
 
 ```
-durahub/
+dorahub/
 ├── package.json                # workspaces：server / web / shared
 ├── deploy/
-│   ├── durahub.service         # systemd 单元（04 §7）
+│   ├── dorahub.service         # systemd 单元（04 §7）
 │   └── deploy.sh               # hub 上一键部署
 ├── packages/
 │   ├── shared/                 # 协议类型 + 帧定义（server 与 web 共用）
@@ -67,7 +67,7 @@ durahub/
 
 ```jsonc
 {
-  "name": "durahub",
+  "name": "dorahub",
   "private": true,
   "workspaces": ["packages/*"],
   "engines": { "node": ">=22" },
@@ -100,14 +100,14 @@ import { serveStatic } from "./static";
 const PORT = 8787;
 
 async function main() {
-  const harness = await startHarness(process.env.DB_PATH ?? "/var/lib/durahub/agent.sqlite");
+  const harness = await startHarness(process.env.DB_PATH ?? "/var/lib/dorahub/agent.sqlite");
   const http = createServer((req, res) => route(harness, req, res)
     .catch(err => { res.writeHead(500, {"content-type":"application/json"});
                     res.end(JSON.stringify({error:{code:"internal",message:String(err)}})); }));
   attachWs(http, harness);                    // /ws upgrade
   serveStatic(http, "../../web/dist");        // PWA 静态托管
   http.listen(PORT, "127.0.0.1", () =>
-    console.log(`durahub on http://127.0.0.1:${PORT} (behind tailscale serve)`));
+    console.log(`dorahub on http://127.0.0.1:${PORT} (behind tailscale serve)`));
   const shutdown = async () => { /* 通知 WS 客户端 bye → harness.close() → exit */ };
   process.on("SIGTERM", shutdown);
   process.on("SIGINT", shutdown);
@@ -144,14 +144,14 @@ export type ExecSrvFrame = ...;   // hub → exec-agent
 #!/usr/bin/env bash
 # hub 上的部署脚本：git pull → build → 重启
 set -euo pipefail
-cd /opt/durahub
-sudo -u durahub git pull --ff-only
-sudo -u durahub npm ci
-sudo -u durahub npm run build
-sudo systemctl restart durahub
+cd /opt/dorahub
+sudo -u dorahub git pull --ff-only
+sudo -u dorahub npm ci
+sudo -u dorahub npm run build
+sudo systemctl restart dorahub
 sleep 1
 curl -s http://127.0.0.1:8787/api/health || { echo "HEALTH CHECK FAILED"; exit 1; }
-journalctl -u durahub -n 20 --no-pager
+journalctl -u dorahub -n 20 --no-pager
 ```
 
 ## 4. 开发工作流（workpc 上的日常）
@@ -161,8 +161,8 @@ journalctl -u durahub -n 20 --no-pager
   server 用本地 sqlite 文件 dev.sqlite —— pi-durable 本地就能全功能开发！）
 
 联调（M2 起）：push → hub 部署 → 手机/workpc 浏览器对 https://hub.<tailnet>.ts.net 测试
-调试 hub：journalctl -u durahub -f；代码改动走 deploy.sh
-崩溃恢复测试：sudo systemctl kill -s SIGKILL durahub（触发 systemd 拉起）
+调试 hub：journalctl -u dorahub -f；代码改动走 deploy.sh
+崩溃恢复测试：sudo systemctl kill -s SIGKILL dorahub（触发 systemd 拉起）
 ```
 
 **这个"本地全功能开发"性质是 pi-durable 给的最大工程便利**：所有功能先在 workpc 本地闭环，VM 只是部署目标——不存在"没网络就没法开发"的阶段。

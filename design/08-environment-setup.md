@@ -18,16 +18,16 @@ sudo dnf install -y nodejs
 node -v                       # ≥ 22
 
 # —— 1.3 运行账户与目录
-sudo useradd -r -s /usr/sbin/nologin durahub
-sudo mkdir -p /opt/durahub /var/lib/durahub /etc/durahub
-sudo chown -R durahub:durahub /var/lib/durahub
+sudo useradd -r -s /usr/sbin/nologin dorahub
+sudo mkdir -p /opt/dorahub /var/lib/dorahub /etc/dorahub
+sudo chown -R dorahub:dorahub /var/lib/dorahub
 
 # —— 1.4 密钥文件（不进 git）
-sudo tee /etc/durahub/env >/dev/null <<'EOF'
+sudo tee /etc/dorahub/env >/dev/null <<'EOF'
 ZJL_BASE_URL=https://你的中转地址/v1
 ZJL_API_KEY=sk-xxx
 EOF
-sudo chmod 600 /etc/durahub/env
+sudo chmod 600 /etc/dorahub/env
 
 # —— 1.5 git（部署用）
 sudo dnf install -y git
@@ -39,7 +39,7 @@ sudo dnf install -y git
 2. **Node.js ≥22 LTS**：官网 MSI，勾选"Add to PATH"（M2 后开发与 M4 的 exec-agent 都需要）
 3. **Git**（已有则跳过）
 4. **浏览器**：Chrome/Edge 任一（PWA 开发与日常使用）
-5. **项目仓库**：`git clone <你的仓库> F:\pi-durable\durahub`（或新初始化，结构见 09）
+5. **项目仓库**：`git clone <你的仓库> F:\pi-durable\dorahub`（或新初始化，结构见 09）
 6. **（M4）WSL2 或 Git Bash**：bash 工具在 Windows 的执行端，见 §3
 
 ## 3. ⚠️ V-04：workpc 上 bash 执行端的三方案（M4 前定）
@@ -71,11 +71,11 @@ pi 的 bash 工具是 bash 语义。workpc 上给 exec-agent 提供 bash 有三�
 hub 的模型调用走用户现有 zjl 中转（OpenAI 兼容）。M1 时在 workpc 上确认：
 
 1. `node_modules/@earendil-works/pi-ai/README.md` 里 provider 自定义端点的配置面（`openaiProvider()` 是否收 baseURL/apiKey；不行则看自定义 provider 写法）
-2. 用户 pi 的 `providers.md` / `auth.json`（`~/.pi/agent/`）里 zjl 的配置就是事实来源：**把 pi 已用的 baseURL/key 复制进 hub 的 /etc/durahub/env**
+2. 用户 pi 的 `providers.md` / `auth.json`（`~/.pi/agent/`）里 zjl 的配置就是事实来源：**把 pi 已用的 baseURL/key 复制进 hub 的 /etc/dorahub/env**
 3. 可用模型清单（glm-5.3 / grok-4.7 等）逐个在 hub 上发一次最小请求验证
 4. 结论（baseURL 形态、provider 写法、可用模型列表）回写 00 号文档 V-02 条目
 
 ## 7. 仓库与远程
 
-- 远端：用户的私有 GitHub/Gitea 仓库（`durahub`）
-- 部署流（M2 起）：workpc 开发 → push → hub 上 `git pull && npm ci && npm run build && sudo systemctl restart durahub`（写个 `deploy.sh` 一键化，见 09）
+- 远端：用户的私有 GitHub/Gitea 仓库（`dorahub`）
+- 部署流（M2 起）：workpc 开发 → push → hub 上 `git pull && npm ci && npm run build && sudo systemctl restart dorahub`（写个 `deploy.sh` 一键化，见 09）

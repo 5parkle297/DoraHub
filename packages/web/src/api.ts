@@ -5,10 +5,10 @@ import type {
   ConversationSummary,
   CreateConversationRequest,
   SendMessageRequest,
-} from "@durahub/shared";
+} from "@dorahub/shared";
 
 function authHeaders(): Record<string, string> {
-  const token = localStorage.getItem("durahub.token");
+  const token = localStorage.getItem("dorahub.token");
   return token ? { authorization: `Bearer ${token}` } : {};
 }
 

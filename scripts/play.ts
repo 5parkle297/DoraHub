@@ -31,8 +31,8 @@ const dbPath = flag("db", "dev.sqlite");
 const cwd = flag("cwd", process.cwd());
 const modelId = flag("model", "grok-4.7");
 
-const zjlBaseUrl = process.env.ZJL_BASE_URL ?? process.env.DURAHUB_ZJL_BASE_URL;
-const zjlApiKey = process.env.ZJL_API_KEY ?? process.env.DURAHUB_ZJL_API_KEY;
+const zjlBaseUrl = process.env.ZJL_BASE_URL ?? process.env.DORAHUB_ZJL_BASE_URL;
+const zjlApiKey = process.env.ZJL_API_KEY ?? process.env.DORAHUB_ZJL_API_KEY;
 if (!zjlBaseUrl || !zjlApiKey) {
   console.error("need ZJL_BASE_URL and ZJL_API_KEY env");
   process.exit(1);

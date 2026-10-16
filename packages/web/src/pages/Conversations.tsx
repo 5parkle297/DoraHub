@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { api } from "../api.ts";
 import { wsClient } from "../ws.ts";
 import { navigate } from "../route.ts";
-import type { ConversationSummary } from "@durahub/shared";
+import type { ConversationSummary } from "@dorahub/shared";
 
 export function ConversationsPage() {
   const [convs, setConvs] = useState<ConversationSummary[]>([]);
@@ -47,7 +47,7 @@ export function ConversationsPage() {
   return (
     <div className="page-list">
       <header className="list-header">
-        <h1>DuraHub</h1>
+        <h1>DoraHub</h1>
         <button className="btn primary" onClick={() => setCreating(true)}>＋ 新会话</button>
       </header>
       {error && <div className="error-banner">{error}</div>}

@@ -3,12 +3,12 @@
  * 命令走 HTTP（幂等 requestId）；流走 WS。
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
-import type { Durahub } from "./durahub.ts";
+import type { Dorahub } from "./dorahub.ts";
 import type { AuditLog } from "./audit.ts";
 import type { ExecRegistry } from "./exec/registry.ts";
 
 export interface HttpApiDeps {
-  app: Durahub;
+  app: Dorahub;
   audit: AuditLog;
   version: string;
   startedAt: number;

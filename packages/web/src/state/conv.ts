@@ -2,7 +2,7 @@
  * ConvCtx reducer（设计 05 §2 对照表）：事件流就是状态机。
  * snapshot 全量替换；message_start/update 增量；tool_* 卡片状态。
  */
-import type { AgentEventLike } from "@durahub/shared";
+import type { AgentEventLike } from "@dorahub/shared";
 
 export interface ToolCardState {
   toolCallId: string;

@@ -6,7 +6,7 @@
 tailnet: <你的名>.ts.net（注册时定，例如 shigu-env.ts.net）
 
 节点（MagicDNS 名 → 100.x.y.z tailnet IP）：
-  hub      CentOS VM 15.208.253.20     ← 跑 durahub + serve
+  hub      CentOS VM 15.208.253.20     ← 跑 dorahub + serve
   workpc   工作电脑 Windows             ← 浏览器 + exec-agent（M4）
   laptop   移动电脑 Windows             ← 浏览器 + exec-agent（M4 可选）
   phone    Android/iOS                 ← Tailscale app + PWA
@@ -36,7 +36,7 @@ tailscale serve --bg localhost:8787
 kill %1; tailscale serve reset
 ```
 
-M2 起，8787 换成 durahub server（systemd 常驻），serve 配置不变。**durahub 永远只听 127.0.0.1**，这是安全基线：攻击面 = tailnet 成员。
+M2 起，8787 换成 dorahub server（systemd 常驻），serve 配置不变。**dorahub 永远只听 127.0.0.1**，这是安全基线：攻击面 = tailnet 成员。
 
 ### serve 的行为要点（已从官方文档核实 ✅）
 

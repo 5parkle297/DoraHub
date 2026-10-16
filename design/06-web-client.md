@@ -4,7 +4,7 @@
 
 - **Vite + React 18 + TypeScript**，构建产物纯静态文件
 - 部署：build 出的 `dist/` 由 hub 的 server 直接静态托管（`GET /` 返回 index.html）——**一个进程服务 API + UI**，serve 一次挂载全搞定
-- PWA：`manifest.webmanifest`（名称 DuraHub、图标、`display: standalone`、theme color）+ 极简 service worker（只做 App Shell 缓存；**不缓存 API/WS**，状态永远来自 hub）
+- PWA：`manifest.webmanifest`（名称 DoraHub、图标、`display: standalone`、theme color）+ 极简 service worker（只做 App Shell 缓存；**不缓存 API/WS**，状态永远来自 hub）
 - 手机"安装"：浏览器 → 添加到主屏幕 → 全屏无地址栏，即"app 体验"
 
 ## 2. 页面结构与路由

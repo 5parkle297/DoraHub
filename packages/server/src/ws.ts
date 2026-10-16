@@ -1,14 +1,14 @@
 /**
  * WebSocket 层（设计 04 §4、05）。
  * 一个客户端一条 WS；hello → attach N 会话 → 事件扇出。
- * watchEvents 每会话只开一个（Durahub 内部管理），WS 层只是订阅者。
+ * watchEvents 每会话只开一个（Dorahub 内部管理），WS 层只是订阅者。
  */
 import type { Server as HttpServer, IncomingMessage } from "node:http";
 import { Duplex } from "node:stream";
 import { WebSocketServer, WebSocket } from "ws";
 import type { AgentEvent } from "@earendil-works/pi-durable";
-import type { CliFrame, SrvFrame } from "@durahub/shared";
-import type { Durahub } from "./durahub.ts";
+import type { CliFrame, SrvFrame } from "@dorahub/shared";
+import type { Dorahub } from "./dorahub.ts";
 import type { AuditLog } from "./audit.ts";
 
 const MAX_FRAME = 1 << 20; // 1 MiB
@@ -23,7 +23,7 @@ interface Client {
   alive: boolean;
 }
 
-export function attachWs(server: HttpServer, app: Durahub, audit: AuditLog) {
+export function attachWs(server: HttpServer, app: Dorahub, audit: AuditLog) {
   const wss = new WebSocketServer({ noServer: true, maxPayload: MAX_FRAME });
   const clients = new Set<Client>();
   const serverId = `srv-${Date.now().toString(36)}`;
@@ -116,11 +116,11 @@ export function attachWs(server: HttpServer, app: Durahub, audit: AuditLog) {
   }, HEARTBEAT_MS);
   heartbeat.unref();
 
-  // 事件扇出（Durahub 回调）
-  const bus = app["events"]; // Durahub 构造注入的 events 对象
+  // 事件扇出（Dorahub 回调）
+  const bus = app["events"]; // Dorahub 构造注入的 events 对象
 
   return {
-    /** 事件回调（DurahubEvents 实现）：发给 attach 该会话的所有客户端 */
+    /** 事件回调（DorahubEvents 实现）：发给 attach 该会话的所有客户端 */
     onEvents(conv: string, events: AgentEvent[]) {
       for (const client of clients) {
         if (client.attached.has(conv)) send(client.ws, { t: "events", conv, events: events as any });

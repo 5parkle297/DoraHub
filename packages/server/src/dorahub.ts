@@ -1,8 +1,8 @@
 /**
- * DuraHub 应用层：把 pi-durable 的 Harness 语义包装成 hub 服务需要的形状。
+ * DoraHub 应用层：把 pi-durable 的 Harness 语义包装成 hub 服务需要的形状。
  *
  * 职责（设计 04 §2-5）：
- * - 会话注册表：枚举 + 元数据（durahub.meta doc）+ running/idle 状态
+ * - 会话注册表：枚举 + 元数据（dorahub.meta doc）+ running/idle 状态
  * - 事件流中心：每会话至多一个 watchEvents，扇出到 N 个订阅者
  * - 确认队列：guard 回调 → WS confirmation 帧 → 用户决定
  * - 会话状态推送：run_start/run_end → conv_status 帧
@@ -17,9 +17,9 @@ import type {
 } from "@earendil-works/pi-durable";
 import { context, defaultAgent } from "./harness.ts";
 import { ConvMetaDoc } from "./conv-meta.ts";
-import type { ConversationSummary } from "@durahub/shared";
+import type { ConversationSummary } from "@dorahub/shared";
 
-export interface DurahubEvents {
+export interface DorahubEvents {
   /** 会话事件批（watchEvents 透传） */
   onEvents(conv: string, events: AgentEvent[]): void;
   /** 会话 running/idle 变化 */
@@ -47,17 +47,17 @@ interface ConfirmWaiter {
   askedAt: number;
 }
 
-export class Durahub {
+export class Dorahub {
   private convs = new Map<string, ConvRecord>();
   private confirmWaiters = new Map<string, ConfirmWaiter>();
 
   public harness: Harness;
-  private events: DurahubEvents;
+  private events: DorahubEvents;
   private opts: { defaultCwd: string; defaultModelId: string };
 
   constructor(
     harness: Harness,
-    events: DurahubEvents,
+    events: DorahubEvents,
     opts: { defaultCwd: string; defaultModelId: string },
   ) {
     this.harness = harness;
@@ -103,7 +103,7 @@ export class Durahub {
     try {
       const view = await conv.viewState(context);
       const docs = view.value.docs as any;
-      if (docs?.["durahub.meta"]?.name) name = docs["durahub.meta"].name;
+      if (docs?.["dorahub.meta"]?.name) name = docs["dorahub.meta"].name;
       // 最后一条 user/assistant entry 做预览
       const entries = view.value.entries ?? [];
       for (let i = entries.length - 1; i >= 0; i--) {
@@ -148,7 +148,7 @@ export class Durahub {
         ownership: { kind: "ownerless" },
         agent: defaultAgent(input.cwd ?? this.opts.defaultCwd, input.model ?? this.opts.defaultModelId),
         init: (tx, conversationId) => {
-          // durahub.meta 初始化（tx.doc 拿 Draft，改后提交）
+          // dorahub.meta 初始化（tx.doc 拿 Draft，改后提交）
           return tx.doc(ConvMetaDoc, conversationId).then((draft) => {
             draft.name = input.name ?? "";
             if (input.envId) draft.envId = input.envId;

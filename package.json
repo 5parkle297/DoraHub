@@ -1,8 +1,8 @@
 {
-  "name": "durahub",
+  "name": "dorahub",
   "version": "0.1.0",
   "private": true,
-  "description": "DuraHub — cross-device durable agent platform on pi-durable + SQLite + Tailscale",
+  "description": "DoraHub — cross-device durable agent platform on pi-durable + SQLite + Tailscale",
   "workspaces": [
     "packages/*"
   ],

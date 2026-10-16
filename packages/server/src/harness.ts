@@ -1,5 +1,5 @@
 /**
- * DuraHub — Harness 装配（M1 核心，对应设计 04 §2）。
+ * DoraHub — Harness 装配（M1 核心，对应设计 04 §2）。
  *
  * 事实源：node_modules/@earendil-works/pi-durable/dist 下的 .d.ts 文件（1.2.0）。
  * - HarnessOptions: { models, registry, settings?, env?, conversationCreated?, onReport? }

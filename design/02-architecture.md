@@ -10,7 +10,7 @@
  o     o              ┌─────────▼──────────┐               ┌───────────┐
  n     n              │  hub (CentOS VM)   │               │ Funnel 入口│
  e     e              │ ┌────────────────┐ │               │ (公网TLS,  │
-                       │ │ durahub server │ │               │  需app token)│
+                       │ │ dorahub server │ │               │  需app token)│
  (PWA)  (PWA)  ──────►│ │  Node.js       │ │◄── 模式B ─────└───────────┘
         ▲             │ │                │ │
         │             │ │ HTTP API       │ │
@@ -25,11 +25,11 @@
                        │ │  ├─ registry   │ │  CodingTools(read/write/edit/bash)
                        │ │  ├─ models     │ │  ──► zjl 中转 (OpenAI 兼容) ──► glm/grok/...
                        │ │  └─ settings   │ │
-                       │ │  SQLite 落盘    │ │  /var/lib/durahub/agent.sqlite
+                       │ │  SQLite 落盘    │ │  /var/lib/dorahub/agent.sqlite
                        │ └───┬────────────┘ │
                        │     │ env({cwd, envId})          ┌──────────────┐
                        │     │                            │  systemd     │
-                       │ ┌───▼────────────┐               │  durahub.    │
+                       │ ┌───▼────────────┐               │  dorahub.    │
                        │ │ LocalEnv(默认)  │ ← M4 前所有   │  service     │
                        │ │ RemoteEnv(M4) ─┼──────────────►│  自动重启    │
                        │ └────────────────┘ │             └──────────────┘
@@ -49,7 +49,7 @@
 
 | 组件 | 位置 | 职责 | 不做什么 |
 |---|---|---|---|
-| **durahub server** | hub VM | 唯一状态拥有者。持有 Harness 实例；暴露 HTTP API + WS；管理客户端连接；审计日志 | 不直接执行工具（除 LocalEnv 默认模式）；不做 UI |
+| **dorahub server** | hub VM | 唯一状态拥有者。持有 Harness 实例；暴露 HTTP API + WS；管理客户端连接；审计日志 | 不直接执行工具（除 LocalEnv 默认模式）；不做 UI |
 | **Harness (pi-durable)** | hub VM 进程内 | 会话/任务/提交的 durable 状态机；模型调用；compaction；多客户端 attach 语义 | 不感知网络（我们在外面套 WS） |
 | **PWA** | phone / workpc / laptop 浏览器 | 聊天 UI、流式渲染、steer/abort/确认、断线重连 | 不持有任何权威状态；刷新即从 viewState 快照重建 |
 | **exec-agent**（M4） | workpc / laptop | 暴露 exec/读/列/写 的执行端点，注册到 hub；把工具执行落到本机文件系统和 shell | 不接触会话/模型/存储；无状态 |
@@ -100,9 +100,9 @@ hub 进程 OOM 被 kill -9
 
 | 服务 | 监听 | 暴露方式 |
 |---|---|---|
-| durahub server | `127.0.0.1:8787`（HTTP+WS 同端口） | `tailscale serve --bg localhost:8787` → `https://hub.<tailnet>.ts.net` |
+| dorahub server | `127.0.0.1:8787`（HTTP+WS 同端口） | `tailscale serve --bg localhost:8787` → `https://hub.<tailnet>.ts.net` |
 | exec-agent（workpc/laptop） | `127.0.0.1:8788`，由本机 tailscale 冒充暴露 或直连 `100.x.y.z:8788`（见 07 的取舍） | 仅 tailnet 内 hub 可达 |
-| SQLite | 无网络 | `/var/lib/durahub/agent.sqlite`（root 属主，0600） |
+| SQLite | 无网络 | `/var/lib/dorahub/agent.sqlite`（root 属主，0600） |
 | （模式 B）funnel | 上述 serve 再 `tailscale funnel 443 on` | `https://hub.<tailnet>.ts.net` 公网可达 + 应用 token |
 
 ## 5. 故障模型与降级

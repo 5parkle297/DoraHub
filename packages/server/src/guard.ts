@@ -9,7 +9,7 @@
 import { readFileSync } from "node:fs";
 import { hook, ToolTask, defineExtension } from "@earendil-works/pi-durable";
 import type { JsonObject } from "@earendil-works/pi-durable";
-import type { ConfirmationItem } from "@durahub/shared";
+import type { ConfirmationItem } from "@dorahub/shared";
 
 export interface GuardRules {
   /** bash 命令直接拒绝的正则（不询问） */
@@ -37,7 +37,7 @@ const CONFIRM_TIMEOUT_MS = 10 * 60_000;
 
 export function createGuardExtension(rules: GuardRules, cb: GuardCallbacks) {
   return defineExtension({
-    name: "durahub-guard",
+    name: "dorahub-guard",
     hooks: [
       hook(ToolTask, {
         beforeTool: async (call, api, ctx) => {
@@ -48,7 +48,7 @@ export function createGuardExtension(rules: GuardRules, cb: GuardCallbacks) {
             const command = String((call.arguments as JsonObject)?.command ?? "");
             for (const pattern of rules.bashDeny) {
               if (new RegExp(pattern).test(command)) {
-                return { block: `durahub-guard: 命令被安全策略直接拒绝 (${pattern})` };
+                return { block: `dorahub-guard: 命令被安全策略直接拒绝 (${pattern})` };
               }
             }
             for (const pattern of rules.alwaysAsk) {
@@ -68,7 +68,7 @@ export function createGuardExtension(rules: GuardRules, cb: GuardCallbacks) {
           const memoKey = `guard:${api.taskId}`;
           const existing = await api.memo<boolean>(memoKey, ctx);
           if (existing !== undefined) {
-            return existing ? undefined : { block: "durahub-guard: 用户此前拒绝了该操作" };
+            return existing ? undefined : { block: "dorahub-guard: 用户此前拒绝了该操作" };
           }
 
           const confirmId = `cf-${api.taskId}`;
@@ -88,7 +88,7 @@ export function createGuardExtension(rules: GuardRules, cb: GuardCallbacks) {
           }
           cb.resolved(item.conv, confirmId, approved);
           await api.memo(memoKey, approved, ctx);
-          return approved ? undefined : { block: "durahub-guard: 用户拒绝了该操作" };
+          return approved ? undefined : { block: "dorahub-guard: 用户拒绝了该操作" };
         },
       }),
     ],

@@ -60,7 +60,7 @@
 ### M2 hub 服务端
 - FR-2.1 HTTP API：会话 CRUD、发送消息、steer、abort、模型切换
 - FR-2.2 WebSocket `/ws`：事件流（watchEvents 转发）+ 客户端命令
-- FR-2.3 systemd 服务 `durahub.service`，开机自启 + 崩溃自动重启
+- FR-2.3 systemd 服务 `dorahub.service`，开机自启 + 崩溃自动重启
 - FR-2.4 `tailscale serve` 挂载（只听 127.0.0.1）
 - FR-2.5 基础审计日志（谁在什么时间连接/提交）
 
