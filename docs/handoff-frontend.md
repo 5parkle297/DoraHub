@@ -192,6 +192,17 @@ React 18.3 + Vite 6 + TS，**无 UI 组件库**（当初的决策是"简历叙�
 5. browser-tools skill 的 `browser-nav.js --new` 可能复用已有同 URL tab 不刷新——要验证新版本加载时先 `curl -s <origin>/ | grep index-` 对比页面里 `[...document.scripts].map(s=>s.src)`；Chrome 调试端口 9222 的启动命令：`"C:/Program Files/Google/Chrome/Application/chrome.exe" --remote-debugging-port=9222 --user-data-dir="C:/Users/shiyu/.cache/browser-tools/profile" --no-first-run about:blank`（skill 的 browser-start.js 在 Windows 上有 mkdir -p bug）
 6. server 静态托管路径：源码运行 vs dist 运行探测两个候选（index.ts 里 webDistCandidates），别只改一边
 7. 智谱直连慢（1-2 分钟）是常态；zjl grok-4.7 快，日常测试用它
+8. **自定义 doc（dorahub.meta）不在 `viewState().docs` 里**（那只有 pi.* builtin）：读用 `harness.documentState(token, conv.id, context)`，conversationId 必须传 Conversation handle 的 id（裸字符串会运行时报 "requires a conversation ID"）——ADR-010 踩坑记录
+9. **Tailscale SSH server 不支持 Windows**（"The Tailscale SSH server is not supported on windows"）：设计 07 的"Tailscale SSH 零配置"假设只对 Linux 成立。workpc 接入 = Windows OpenSSH Server（管理员 PowerShell：`Add-WindowsCapability -Online -Name "OpenSSH.Server~~~~0.0.1.0"; Start-Service sshd; Set-Service sshd -StartupType Automatic`）+ hub 用 DORAHUB_EXEC_WORKPC_HOST=cyq 连。pi-env 的 daemon 部署走 PowerShell + SSH，兼容原生 sshd
+10. browser-eval 里 `location.reload()` 会毁掉当前 eval 上下文（Execution context destroyed）——reload 后要单独再发一次 eval
+11. Windows 会莫名冒出 `nul` 保留名垃圾文件（重定向 bug），`git add -A` 前先 `rm -f nul`，已进 .gitignore
+
+### 执行机接入现状（2026-10-16 深夜，M4）
+
+- hub 的 `/etc/dorahub/env` 已配：`DORAHUB_EXEC_WORKPC_HOST=cyq`（管理台改名 workpc 待办）+ `DORAHUB_EXEC_LAPTOP_HOST=laptop`（未入 tailnet，离线显示）
+- `/api/executors` 返回三台：hub（在线）/ workpc（离线，等 sshd）/ laptop（离线）
+- **workpc 开通步骤**（等用户手动）：装 OpenSSH Server（上面坑 9 的命令）→ hub 上验证 `sudo -u dorahub ssh shiyu@cyq whoami`（首次要处理 host key）→ 新建会话选 workpc → 发个 `bash: ls D:/hobby` 验证远程执行
+- laptop 入网：装 Tailscale 客户端登录同账号 → MagicDNS 名改 laptop → 自动在线
 
 ## 7. 验收基线（改完后这些必须仍然通过）
 
