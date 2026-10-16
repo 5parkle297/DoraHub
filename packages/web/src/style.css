@@ -234,11 +234,16 @@ body {
   position: fixed; inset: 0; background: rgba(30, 26, 18, 0.35);
   backdrop-filter: blur(4px);
   display: flex; align-items: center; justify-content: center; z-index: 50;
+  padding: var(--sp-4); /* 小屏时弹窗不贴边 */
 }
 .modal {
   background: var(--bg-raised); border-radius: var(--r-xl);
-  padding: var(--sp-5); width: min(460px, 90vw);
+  padding: var(--sp-5); width: min(460px, 92vw);
   box-shadow: var(--shadow-pop);
+  /* 关键：限高 + 内滚，防止内容多时顶部被顶出屏幕外 */
+  max-height: min(86vh, 640px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .modal h3 { margin: 0 0 var(--sp-3); font-size: var(--fs-lg); }
 .modal input, .modal .select-fake {
@@ -464,9 +469,11 @@ body {
   margin-bottom: var(--sp-2);
 }
 .model-list {
-  max-height: 300px; overflow-y: auto;
+  /* 弹性高度：弹窗限高后按视口分配，不再固定 300px */
+  max-height: min(45vh, 340px); overflow-y: auto;
   display: flex; flex-direction: column; gap: 4px;
   padding-right: 2px;
+  overscroll-behavior: contain;
 }
 .model-row {
   display: flex; align-items: center; gap: var(--sp-2);

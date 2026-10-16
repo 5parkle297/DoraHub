@@ -5,6 +5,7 @@ import { api } from "../api.ts";
 import { wsClient } from "../ws.ts";
 import { navigate } from "../route.ts";
 import { relTime } from "../util/time.ts";
+import { Modal } from "../components/Modal.tsx";
 import type { ConversationSummary, ExecutorInfo } from "@dorahub/shared";
 
 /** cwd → 项目显示名（basename） */
@@ -221,76 +222,74 @@ function CreateModal({
   }
 
   return (
-    <div className="modal-mask" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <h3>新建会话</h3>
-        <div style={{ color: "var(--text-dim)", fontSize: "var(--fs-sm)", marginBottom: 12 }}>
-          不用起名——发出第一条消息后会自动生成标题和摘要。
-        </div>
-
-        <label className="picker-label">在哪台机器上执行</label>
-        <div className="picker-row">
-          <button
-            key="hub"
-            className={`picker-chip ${envId === "hub" ? "on" : ""}`}
-            onClick={() => setEnvId("hub")}
-            title="hub 云端主机（阿里云 VM）"
-          >
-            ☁ 云端 hub
-          </button>
-          {executors.filter((e) => e.envId !== "hub").map((e) => (
-            <button
-              key={e.envId}
-              className={`picker-chip ${envId === e.envId ? "on" : ""}`}
-              onClick={() => setEnvId(e.envId)}
-              title={e.online ? `${e.host} · 在线` : `${e.host} · 离线`}
-            >
-              🖥 {e.envId} {!e.online && <span style={{ opacity: 0.5 }}>·离线</span>}
-            </button>
-          ))}
-        </div>
-
-        <label className="picker-label">项目文件夹{currentExec && `（${envLabel(envId, currentExec.host)} 的路径）`}</label>
-        <div className="cwd-options">
-          {recent.map((cwd) => (
-            <button key={cwd} className="cwd-option" onClick={() => pick(cwd)}>
-              <span className="opt-name">{projectOf(cwd).name}</span>
-              <span className="opt-path" title={cwd}>{cwd}</span>
-            </button>
-          ))}
-          {recent.length === 0 && (
-            <div style={{ color: "var(--text-faint)", fontSize: "var(--fs-sm)", padding: "4px 2px" }}>
-              还没有最近项目，在下面输入路径
-            </div>
-          )}
-        </div>
-        <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-          <input
-            value={custom}
-            placeholder={
-              envId === "hub"
-                ? "或输入路径（如 /var/lib/dorahub/workspace/xxx）"
-                : `或输入 ${envId} 上的路径`
-            }
-            onChange={(e) => setCustom(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && custom.trim()) pick(custom.trim());
-            }}
-          />
-          <button
-            className="btn primary"
-            style={{ flex: "none" }}
-            disabled={!custom.trim()}
-            onClick={() => pick(custom.trim())}
-          >
-            创建
-          </button>
-        </div>
-        <div className="modal-actions">
-          <button className="btn" onClick={() => onCreate({ envId })}>不选文件夹，直接建</button>
-        </div>
+    <Modal onClose={onClose}>
+      <h3>新建会话</h3>
+      <div style={{ color: "var(--text-dim)", fontSize: "var(--fs-sm)", marginBottom: 12 }}>
+        不用起名——发出第一条消息后会自动生成标题和摘要。
       </div>
-    </div>
+
+      <label className="picker-label">在哪台机器上执行</label>
+      <div className="picker-row">
+        <button
+          key="hub"
+          className={`picker-chip ${envId === "hub" ? "on" : ""}`}
+          onClick={() => setEnvId("hub")}
+          title="hub 云端主机（阿里云 VM）"
+        >
+          ☁ 云端 hub
+        </button>
+        {executors.filter((e) => e.envId !== "hub").map((e) => (
+          <button
+            key={e.envId}
+            className={`picker-chip ${envId === e.envId ? "on" : ""}`}
+            onClick={() => setEnvId(e.envId)}
+            title={e.online ? `${e.host} · 在线` : `${e.host} · 离线`}
+          >
+            🖥 {e.envId} {!e.online && <span style={{ opacity: 0.5 }}>·离线</span>}
+          </button>
+        ))}
+      </div>
+
+      <label className="picker-label">项目文件夹{currentExec && `（${envLabel(envId, currentExec.host)} 的路径）`}</label>
+      <div className="cwd-options">
+        {recent.map((cwd) => (
+          <button key={cwd} className="cwd-option" onClick={() => pick(cwd)}>
+            <span className="opt-name">{projectOf(cwd).name}</span>
+            <span className="opt-path" title={cwd}>{cwd}</span>
+          </button>
+        ))}
+        {recent.length === 0 && (
+          <div style={{ color: "var(--text-faint)", fontSize: "var(--fs-sm)", padding: "4px 2px" }}>
+            还没有最近项目，在下面输入路径
+          </div>
+        )}
+      </div>
+      <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+        <input
+          value={custom}
+          placeholder={
+            envId === "hub"
+              ? "或输入路径（如 /var/lib/dorahub/workspace/xxx）"
+              : `或输入 ${envId} 上的路径`
+          }
+          onChange={(e) => setCustom(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && custom.trim()) pick(custom.trim());
+          }}
+        />
+        <button
+          className="btn primary"
+          style={{ flex: "none" }}
+          disabled={!custom.trim()}
+          onClick={() => pick(custom.trim())}
+        >
+          创建
+        </button>
+      </div>
+      <div className="modal-actions">
+        <button className="btn" onClick={() => onCreate({ envId })}>不选文件夹，直接建</button>
+      </div>
+    </Modal>
   );
 }
 

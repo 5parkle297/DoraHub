@@ -13,6 +13,16 @@ export function Composer({
   const [sending, setSending] = useState(false);
   const taRef = useRef<HTMLTextAreaElement>(null);
 
+  // 移动端虚拟键盘适配：viewport meta 的 interactive-widget=resizes-content
+  // （index.html，Android Chrome 108+ 原生把键盘算进视口高度）；iOS Safari 自行处理 fixed 底栏
+
+  function autoGrow() {
+    const el = taRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = Math.min(el.scrollHeight, 160) + "px";
+  }
+
   function autoGrow() {
     const el = taRef.current;
     if (!el) return;

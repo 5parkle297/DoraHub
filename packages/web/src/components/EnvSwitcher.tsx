@@ -6,6 +6,7 @@
 import { useState } from "react";
 import { api } from "../api.ts";
 import { envLabel } from "../pages/Conversations.tsx";
+import { Modal } from "./Modal.tsx";
 import type { ExecutorInfo } from "@dorahub/shared";
 
 export function EnvSwitcher({
@@ -51,64 +52,62 @@ export function EnvSwitcher({
       </button>
 
       {open && (
-        <div className="modal-mask" onClick={() => setOpen(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <h3>切换执行机</h3>
+        <Modal onClose={() => setOpen(false)}>
+          <h3>切换执行机</h3>
 
-            <div style={{ fontSize: "var(--fs-sm)", color: "var(--text-dim)", marginBottom: 12 }}>
-              当前：<strong>{currentLabel}</strong>
-            </div>
-
-            {switching && (
-              <div className="env-warning">
-                ⚠ <strong>跨机切换须知</strong>
-                <div style={{ marginTop: 6 }}>
-                  agent 的对话记忆会完整保留，但它记得的是
-                  <strong>旧机器上的文件</strong>（改动过什么、文件内容）。
-                  新机器上的文件可能不存在或版本不同——建议切换后先让 agent
-                  重新查看关键文件再继续任务。
-                </div>
-              </div>
-            )}
-
-            <label className="picker-label">选择目标机器</label>
-            <div className="picker-row">
-              <button
-                className={`picker-chip ${!current || current === "hub" ? "on" : ""}`}
-                disabled={busy}
-                onClick={() => switchTo("hub")}
-                title="hub 云端主机"
-              >
-                ☁ 云端 hub
-              </button>
-              {executors
-                .filter((e) => e.envId !== "hub")
-                .map((e) => (
-                  <button
-                    key={e.envId}
-                    className={`picker-chip ${current === e.envId ? "on" : ""}`}
-                    disabled={busy}
-                    onClick={() => switchTo(e.envId)}
-                    title={e.online ? `${e.host} · 在线` : `${e.host} · 离线`}
-                  >
-                    🖥 {e.envId} {!e.online && <span style={{ opacity: 0.5 }}>·离线</span>}
-                  </button>
-                ))}
-            </div>
-
-            {executors.filter((e) => e.envId !== "hub").length === 0 && (
-              <div style={{ color: "var(--text-faint)", fontSize: "var(--fs-sm)", marginTop: 8 }}>
-                还没有注册其他执行机（M4：在 hub 配置 DORAHUB_EXEC_* 环境变量接入远程机器）
-              </div>
-            )}
-
-            {error && <div className="picker-msg">{error}</div>}
-
-            <div className="modal-actions">
-              <button className="btn" onClick={() => setOpen(false)}>取消</button>
-            </div>
+          <div style={{ fontSize: "var(--fs-sm)", color: "var(--text-dim)", marginBottom: 12 }}>
+            当前：<strong>{currentLabel}</strong>
           </div>
-        </div>
+
+          {switching && (
+            <div className="env-warning">
+              ⚠ <strong>跨机切换须知</strong>
+              <div style={{ marginTop: 6 }}>
+                agent 的对话记忆会完整保留，但它记得的是
+                <strong>旧机器上的文件</strong>（改动过什么、文件内容）。
+                新机器上的文件可能不存在或版本不同——建议切换后先让 agent
+                重新查看关键文件再继续任务。
+              </div>
+            </div>
+          )}
+
+          <label className="picker-label">选择目标机器</label>
+          <div className="picker-row">
+            <button
+              className={`picker-chip ${!current || current === "hub" ? "on" : ""}`}
+              disabled={busy}
+              onClick={() => switchTo("hub")}
+              title="hub 云端主机"
+            >
+              ☁ 云端 hub
+            </button>
+            {executors
+              .filter((e) => e.envId !== "hub")
+              .map((e) => (
+                <button
+                  key={e.envId}
+                  className={`picker-chip ${current === e.envId ? "on" : ""}`}
+                  disabled={busy}
+                  onClick={() => switchTo(e.envId)}
+                  title={e.online ? `${e.host} · 在线` : `${e.host} · 离线`}
+                >
+                  🖥 {e.envId} {!e.online && <span style={{ opacity: 0.5 }}>·离线</span>}
+                </button>
+              ))}
+          </div>
+
+          {executors.filter((e) => e.envId !== "hub").length === 0 && (
+            <div style={{ color: "var(--text-faint)", fontSize: "var(--fs-sm)", marginTop: 8 }}>
+              还没有注册其他执行机（M4：在 hub 配置 DORAHUB_EXEC_* 环境变量接入远程机器）
+            </div>
+          )}
+
+          {error && <div className="picker-msg">{error}</div>}
+
+          <div className="modal-actions">
+            <button className="btn" onClick={() => setOpen(false)}>取消</button>
+          </div>
+        </Modal>
       )}
     </>
   );

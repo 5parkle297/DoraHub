@@ -6,6 +6,7 @@
  */
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../api.ts";
+import { Modal } from "./Modal.tsx";
 
 interface CatalogModel {
   id: string;
@@ -115,78 +116,76 @@ export function ModelPicker({
   }
 
   return (
-    <div className="modal-mask" onClick={() => setOpen(false)}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <h3>模型</h3>
+    <Modal onClose={() => setOpen(false)}>
+      <h3>模型</h3>
 
-        <input
-          className="model-search"
-          autoFocus
-          value={query}
-          placeholder="搜索 provider/model…"
-          onChange={(e) => setQuery(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              // Enter = 选第一个可见项
-              if (rows[0]) setSel(`${rows[0].provider}:${rows[0].model.id}`);
-            }
-          }}
-        />
+      <input
+        className="model-search"
+        autoFocus
+        value={query}
+        placeholder="搜索 provider/model…"
+        onChange={(e) => setQuery(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            // Enter = 选第一个可见项
+            if (rows[0]) setSel(`${rows[0].provider}:${rows[0].model.id}`);
+          }
+        }}
+      />
 
-        <div className="model-list">
-          {rows.map((r) => {
-            const ref = `${r.provider}:${r.model.id}`;
-            const isSel = ref === sel;
-            return (
-              <button
-                key={ref}
-                className={`model-row ${isSel ? "on" : ""}`}
-                onClick={() => {
-                  setSel(ref);
-                  setThinking(null);
-                }}
-              >
-                <span className="model-row-ref">{modelRef(r.provider, r.model.id)}</span>
-                <span className="model-row-name">{r.model.name}</span>
-                {r.model.reasoning && <span className="model-row-tag">思考</span>}
-                {isSel && <span className="model-row-check">✓</span>}
-              </button>
-            );
-          })}
-          {rows.length === 0 && (
-            <div style={{ color: "var(--text-faint)", fontSize: "var(--fs-sm)", padding: 12 }}>
-              没有匹配的模型
-            </div>
-          )}
-        </div>
-
-        {selRow?.model.reasoning && selRow.model.thinkingLevels.length > 0 && (
-          <>
-            <label className="picker-label">思考强度 · {modelRef(selRow.provider, selRow.model.id)}</label>
-            <div className="picker-row">
-              {selRow.model.thinkingLevels.map((lv) => (
-                <button
-                  key={lv}
-                  className={`picker-chip ${lv === (thinking ?? "medium") ? "on" : ""}`}
-                  onClick={() => setThinking(lv)}
-                >
-                  {THINKING_LABEL[lv] ?? lv}
-                </button>
-              ))}
-            </div>
-          </>
+      <div className="model-list">
+        {rows.map((r) => {
+          const ref = `${r.provider}:${r.model.id}`;
+          const isSel = ref === sel;
+          return (
+            <button
+              key={ref}
+              className={`model-row ${isSel ? "on" : ""}`}
+              onClick={() => {
+                setSel(ref);
+                setThinking(null);
+              }}
+            >
+              <span className="model-row-ref">{modelRef(r.provider, r.model.id)}</span>
+              <span className="model-row-name">{r.model.name}</span>
+              {r.model.reasoning && <span className="model-row-tag">思考</span>}
+              {isSel && <span className="model-row-check">✓</span>}
+            </button>
+          );
+        })}
+        {rows.length === 0 && (
+          <div style={{ color: "var(--text-faint)", fontSize: "var(--fs-sm)", padding: 12 }}>
+            没有匹配的模型
+          </div>
         )}
-
-        {msg && <div className="picker-msg">{msg}</div>}
-
-        <div className="modal-actions">
-          <button className="btn" onClick={() => setOpen(false)}>取消</button>
-          <button className="btn primary" disabled={!sel || busy} onClick={apply}>
-            {busy ? "切换中…" : "应用"}
-          </button>
-        </div>
       </div>
-    </div>
+
+      {selRow?.model.reasoning && selRow.model.thinkingLevels.length > 0 && (
+        <>
+          <label className="picker-label">思考强度 · {modelRef(selRow.provider, selRow.model.id)}</label>
+          <div className="picker-row">
+            {selRow.model.thinkingLevels.map((lv) => (
+              <button
+                key={lv}
+                className={`picker-chip ${lv === (thinking ?? "medium") ? "on" : ""}`}
+                onClick={() => setThinking(lv)}
+              >
+                {THINKING_LABEL[lv] ?? lv}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+
+      {msg && <div className="picker-msg">{msg}</div>}
+
+      <div className="modal-actions">
+        <button className="btn" onClick={() => setOpen(false)}>取消</button>
+        <button className="btn primary" disabled={!sel || busy} onClick={apply}>
+          {busy ? "切换中…" : "应用"}
+        </button>
+      </div>
+    </Modal>
   );
 }
