@@ -9,7 +9,8 @@ import { Composer } from "../components/Composer.tsx";
 import { ConfirmationCard } from "../components/ConfirmationCard.tsx";
 import { InboxBar } from "../components/Inbox.tsx";
 import { ModelPicker } from "../components/ModelPicker.tsx";
-import type { ConfirmationItem } from "@dorahub/shared";
+import { EnvSwitcher } from "../components/EnvSwitcher.tsx";
+import type { ConfirmationItem, ExecutorInfo } from "@dorahub/shared";
 
 export function ConversationPage({ id }: { id: string }) {
   const [state, dispatch] = useReducer(
@@ -25,6 +26,8 @@ export function ConversationPage({ id }: { id: string }) {
   const [atBottom, setAtBottom] = useState(true);
   const [agentInfo, setAgentInfo] = useState<{ provider?: string; modelId?: string; thinkingLevel?: string | null }>({});
   const [agentTick, setAgentTick] = useState(0);
+  const [envId, setEnvId] = useState<string | null>(null);
+  const [executors, setExecutors] = useState<ExecutorInfo[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
   // 首次：HTTP snapshot；随后 WS attach
   useEffect(() => {
@@ -55,6 +58,7 @@ export function ConversationPage({ id }: { id: string }) {
         } else if (f.t === "conv_meta" && f.conv === id) {
           // 自动命名完成 → 无刷新换标题（S5）
           setConvName(f.name);
+          if (f.envId !== undefined) setEnvId(f.envId);
         }
       },
     });
@@ -80,12 +84,16 @@ export function ConversationPage({ id }: { id: string }) {
     return unsub;
   }, [id]);
 
-  // 会话名 + 当前 agent（模型/思考强度）
+  // 会话名 + 当前 agent（模型/思考强度）+ 执行机
   useEffect(() => {
     api.listConversations().then((cs) => {
       const c = cs.find((c) => c.id === id);
-      if (c && c.name) setConvName(c.name);
+      if (c) {
+        if (c.name) setConvName(c.name);
+        setEnvId(c.envId);
+      }
     }).catch(() => {});
+    api.executors().then(setExecutors).catch(() => {});
     api.snapshot(id).then((snap) => {
       const a = snap?.agent ?? {};
       setAgentInfo({
@@ -144,6 +152,12 @@ export function ConversationPage({ id }: { id: string }) {
         <button className="btn ghost" onClick={() => navigate({ page: "conversations" })}>←</button>
         <div className="conv-title">
           <span className="conv-title-name">{convName}</span>
+          <EnvSwitcher
+            convId={id}
+            current={envId}
+            executors={executors}
+            onSwitched={(v) => setEnvId(v)}
+          />
           {agentInfo.modelId && (
             <button className="model-tag" title="点击切换模型/思考强度">
               {agentInfo.provider}:{agentInfo.modelId}

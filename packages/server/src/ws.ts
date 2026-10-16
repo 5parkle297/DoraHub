@@ -130,8 +130,8 @@ export function attachWs(server: HttpServer, app: Dorahub, audit: AuditLog) {
       const frame: SrvFrame = { t: "conv_status", conv, status };
       for (const client of clients) send(client.ws, frame);
     },
-    onMeta(conv: string, meta: { name: string; description: string | null; keywords: string[] }) {
-      const frame: SrvFrame = { t: "conv_meta", conv, name: meta.name, description: meta.description, keywords: meta.keywords };
+    onMeta(conv: string, meta: { name: string; description: string | null; keywords: string[]; envId: string | null }) {
+      const frame: SrvFrame = { t: "conv_meta", conv, name: meta.name, description: meta.description, keywords: meta.keywords, envId: meta.envId };
       for (const client of clients) send(client.ws, frame);
     },
     onConfirmation(conv: string, item: any) {

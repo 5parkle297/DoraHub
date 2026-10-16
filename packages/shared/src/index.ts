@@ -23,6 +23,8 @@ export interface ConversationSummary {
   description: string | null;
   /** 自动生成的关键词 chips（0.5-B） */
   keywords: string[];
+  /** 执行机（M4；null/"hub" = hub 本地） */
+  envId: string | null;
 }
 
 export interface CreateConversationRequest {
@@ -77,6 +79,14 @@ export interface ConfirmationItem {
   askedAt: number;
 }
 
+export interface ExecutorInfo {
+  envId: string;
+  host: string;
+  defaultCwd: string;
+  online: boolean;
+  lastSeen: number | null;
+}
+
 export interface ApiError {
   error: { code: string; message: string };
 }
@@ -91,7 +101,7 @@ export type SrvFrame =
   | { t: "snapshot"; conv: string; snapshot: AgentEventLike } // watchEvents 的 snapshot 事件原样
   | { t: "events"; conv: string; events: AgentEventLike[] }
   | { t: "conv_status"; conv: string; status: "running" | "idle" }
-  | { t: "conv_meta"; conv: string; name: string; description: string | null; keywords: string[] }
+  | { t: "conv_meta"; conv: string; name: string; description: string | null; keywords: string[]; envId: string | null }
   | { t: "confirmation"; conv: string; confirm: ConfirmationItem }
   | { t: "confirm_resolved"; conv: string; id: string; approved: boolean }
   | { t: "pong" }

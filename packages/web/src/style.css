@@ -207,6 +207,23 @@ body {
   font-size: var(--fs-xs); border-radius: var(--r-pill); padding: 2px 10px;
 }
 .conv-preview { color: var(--text-faint); font-size: var(--fs-sm); margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* 执行机徽章（M4） */
+.conv-env {
+  display: flex; align-items: center; gap: var(--sp-2); margin-top: 5px;
+  font-size: var(--fs-xs); color: var(--text-faint);
+}
+.env-badge {
+  color: var(--blue); background: var(--blue-soft);
+  border-radius: var(--r-pill); padding: 1px 9px;
+  font-size: var(--fs-xs); flex: none;
+}
+.env-tag { color: var(--blue); }
+.env-warning {
+  background: var(--yellow-soft); color: var(--yellow);
+  border-radius: var(--r-md); padding: 10px 14px;
+  font-size: var(--fs-sm); margin-bottom: 8px; line-height: 1.55;
+}
 .empty {
   color: var(--text-dim); text-align: center; padding: 64px var(--sp-5);
   font-size: var(--fs-md);

@@ -51,6 +51,8 @@ export const api = {
       body: JSON.stringify(change),
     }),
 
+  executors: () => call<import("@dorahub/shared").ExecutorInfo[]>("/api/executors"),
+
   fork: (conv: string, entryId?: string) =>
     call<{ id: string }>(`/api/conversations/${encodeURIComponent(conv)}/fork`, {
       method: "POST",

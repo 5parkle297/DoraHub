@@ -27,7 +27,7 @@ export interface DorahubEvents {
   /** 会话 running/idle 变化 */
   onStatus(conv: string, status: "running" | "idle"): void;
   /** 会话元数据变化（自动命名 / 手动改名，handoff §0.5-B） */
-  onMeta(conv: string, meta: { name: string; description: string | null; keywords: string[] }): void;
+  onMeta(conv: string, meta: { name: string; description: string | null; keywords: string[]; envId: string | null }): void;
   /** 确认请求（guard） */
   onConfirmation(conv: string, item: any): void;
   onConfirmationResolved(conv: string, id: string, approved: boolean): void;
@@ -43,7 +43,7 @@ interface ConvRecord {
   lastPreview: string;
   updatedAt: number;
   /** 元数据（v2 自动命名字段，handoff §0.5-B） */
-  meta: { description: string | null; keywords: string[]; autoNamed: boolean; namedAtUserCount: number };
+  meta: { description: string | null; keywords: string[]; autoNamed: boolean; namedAtUserCount: number; envId: string | null };
   /** agent 配置快照（列表页 model/cwd） */
   model: string | null;
   cwd: string | null;
@@ -82,9 +82,9 @@ export class Dorahub {
       const rec = this.convs.get(convId);
       if (rec) {
         rec.name = title;
-        rec.meta = { description, keywords, autoNamed: true, namedAtUserCount: rec.meta.namedAtUserCount };
+        rec.meta = { description, keywords, autoNamed: true, namedAtUserCount: rec.meta.namedAtUserCount, envId: rec.meta.envId };
       }
-      this.events.onMeta(convId, { name: title, description, keywords });
+      this.events.onMeta(convId, { name: title, description, keywords, envId: rec?.meta.envId ?? null });
     };
   }
 
@@ -133,7 +133,7 @@ export class Dorahub {
     if (this.convs.has(id)) return;
     let name = fallbackName;
     let lastPreview = "";
-    const meta: ConvRecord["meta"] = { description: null, keywords: [], autoNamed: false, namedAtUserCount: 0 };
+    const meta: ConvRecord["meta"] = { description: null, keywords: [], autoNamed: false, namedAtUserCount: 0, envId: null };
     let model: string | null = null;
     let cwd: string | null = null;
     try {
@@ -146,6 +146,7 @@ export class Dorahub {
         meta.keywords = m.keywords ?? [];
         meta.autoNamed = m.autoNamed === true;
         meta.namedAtUserCount = typeof m.namedAtUserCount === "number" ? m.namedAtUserCount : 0;
+        meta.envId = m.envId ?? null;
       }
       // agent 配置（pi.agent doc）
       const view = await conv.viewState(context);
@@ -195,6 +196,7 @@ export class Dorahub {
         lastPreview: r.lastPreview,
         description: r.meta.description,
         keywords: r.meta.keywords,
+        envId: r.meta.envId && r.meta.envId !== "hub" ? r.meta.envId : null,
       }));
   }
 
@@ -237,7 +239,7 @@ export class Dorahub {
     if (rec) {
       rec.name = name;
       rec.meta.autoNamed = false;
-      this.events.onMeta(id, { name, description: rec.meta.description, keywords: rec.meta.keywords });
+      this.events.onMeta(id, { name, description: rec.meta.description, keywords: rec.meta.keywords, envId: rec.meta.envId });
     }
   }
 
@@ -250,6 +252,11 @@ export class Dorahub {
         draft.envId = envId;
       });
     }, context);
+    const rec = this.convs.get(id);
+    if (rec) {
+      rec.meta.envId = envId;
+      this.events.onMeta(id, { name: rec.name, description: rec.meta.description, keywords: rec.meta.keywords, envId });
+    }
   }
 
   /** 提交消息（ask/steer）。 */
