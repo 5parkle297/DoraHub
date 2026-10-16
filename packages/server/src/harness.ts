@@ -14,6 +14,16 @@ import { NodeExecutionEnv } from "@earendil-works/pi-durable/env/node";
 import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/node";
 import { installZjl, ZJL_PROVIDER_ID } from "./zjl-provider.ts";
 
+/** 解析 "provider:model" 形式的模型描述（如 "trial:glm-5.3"）；缺省 provider = zjl。 */
+export function parseModelRef(desc?: string): { provider: string; modelId: string } {
+  if (!desc) return { provider: "zjl", modelId: "grok-4.7" };
+  const i = desc.indexOf(":");
+  if (i > 0 && !desc.slice(0, i).includes("/")) {
+    return { provider: desc.slice(0, i), modelId: desc.slice(i + 1) };
+  }
+  return { provider: "zjl", modelId: desc };
+}
+
 export const context = BACKGROUND_CONTEXT;
 
 export interface HarnessConfig {
@@ -57,7 +67,7 @@ export async function startHarness(config: HarnessConfig) {
 /** 新会话/根会话的默认 agent 配置。 */
 export function defaultAgent(cwd: string, modelId?: string) {
   return {
-    model: { provider: ZJL_PROVIDER_ID, modelId: modelId ?? "grok-4.7" },
+    model: parseModelRef(modelId),
     cwd,
   };
 }

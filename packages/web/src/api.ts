@@ -27,6 +27,8 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
 export const api = {
   health: () => call<{ ok: true; uptime: number; version: string }>("/api/health"),
 
+  models: () => call<any[]>("/api/models"),
+
   listConversations: () => call<ConversationSummary[]>("/api/conversations"),
 
   createConversation: (req: CreateConversationRequest) =>

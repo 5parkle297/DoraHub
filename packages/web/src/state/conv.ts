@@ -36,10 +36,12 @@ export interface ConvState {
   inbox: InboxItemState[];
   status: "running" | "idle";
   usage: any;
+  /** 渠道故障警告（auto_retry / task_failed / unanswered） */
+  alert: { kind: "retry" | "failed" | "unanswered"; text: string; at: number } | null;
 }
 
 export function initialConvState(): ConvState {
-  return { entries: [], tools: new Map(), inbox: [], status: "idle", usage: null };
+  return { entries: [], tools: new Map(), inbox: [], status: "idle", usage: null, alert: null };
 }
 
 /** watchEvents snapshot 事件 → 状态。 */
@@ -117,6 +119,15 @@ function pushEntry(state: ConvState, raw: any) {
   if (kind === "pi.user") {
     state.entries.push({ id: String(raw.id), role: "user", text: textOf(raw), thinking: "", toolCalls: [], streaming: false });
   } else if (kind === "pi.assistant") {
+    const m = raw?.model?.[0] ?? {};
+    // 渠道错误落地为 stopReason=error 的 assistant entry（401/限流等）
+    if (m.stopReason === "error") {
+      state.alert = {
+        kind: "failed",
+        text: `渠道错误：${String(m.errorMessage ?? "unknown").slice(0, 200)}——建议切换渠道后重发`,
+        at: Date.now(),
+      };
+    }
     const msg: MessageState = {
       id: String(raw.id),
       role: "assistant",
@@ -145,16 +156,46 @@ function pushEntry(state: ConvState, raw: any) {
 
 /** 增量事件批 → 状态（05 §2 reducer 对照表）。 */
 export function applyEvents(state: ConvState, events: AgentEventLike[]): ConvState {
-  const next: ConvState = { ...state, tools: new Map(state.tools), entries: [...state.entries], inbox: [...state.inbox] };
+  const next: ConvState = { ...state, tools: new Map(state.tools), entries: [...state.entries], inbox: [...state.inbox], alert: state.alert };
 
   for (const ev of events) {
     switch (ev.type) {
       case "run_start":
         next.status = "running";
+        next.alert = null; // 新一轮运行清除旧警告
         break;
       case "run_end":
         next.status = "idle";
         break;
+      case "auto_retry_start": {
+        next.alert = {
+          kind: "retry",
+          text: `渠道出错，第 ${ev.attempt} 次重试：${String(ev.errorMessage).slice(0, 160)}`,
+          at: Date.now(),
+        };
+        break;
+      }
+      case "auto_retry_end":
+        if (next.alert?.kind === "retry") next.alert = null;
+        break;
+      case "task_failed": {
+        next.alert = {
+          kind: "failed",
+          text: `任务失败（${ev.kind}）：${String(ev.message).slice(0, 200)}`,
+          at: Date.now(),
+        };
+        break;
+      }
+      case "submission": {
+        if (ev.record.status === "unanswered") {
+          next.alert = {
+            kind: "unanswered",
+            text: "模型未应答（渠道可能不可用）——建议在菜单里切换渠道后重发",
+            at: Date.now(),
+          };
+        }
+        break;
+      }
       case "message_start": {
         const m = ev.message as any;
         if (m?.role === "assistant") {

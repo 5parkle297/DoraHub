@@ -6,6 +6,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Dorahub } from "./dorahub.ts";
 import type { AuditLog } from "./audit.ts";
 import type { ExecRegistry } from "./exec/registry.ts";
+import type { ChannelConfig } from "./channels.ts";
 
 export interface HttpApiDeps {
   app: Dorahub;
@@ -16,6 +17,8 @@ export interface HttpApiDeps {
   token?: string;
   /** M4：执行机注册表 */
   execRegistry?: ExecRegistry;
+  /** 渠道目录（/api/models） */
+  channels?: ChannelConfig[];
 }
 
 const MAX_BODY = 1 << 20; // 1 MiB
@@ -158,6 +161,12 @@ export function createRouter(deps: HttpApiDeps) {
       if (!ok) return err(res, 404, "not_found", "confirmation not pending");
       audit.log("confirmation", { id: confirmMatch[1], approved: body.approved === true });
       return json(res, 200, { ok: true });
+    }
+
+    // ---------- 模型渠道目录（切换用） ----------
+    if (path === "/api/models" && method === "GET") {
+      const { channelCatalog } = await import("./channels.ts");
+      return json(res, 200, channelCatalog(deps.channels ?? []));
     }
 
     // ---------- 执行机（M4） ----------

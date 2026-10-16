@@ -169,6 +169,31 @@ body {
 .composer textarea:focus { outline: none; border-color: var(--accent); }
 .send-btn { flex: none; }
 
+/* 模型选择器 */
+.model-tag {
+  background: #16233b; color: var(--accent); border: 1px solid #2c3f63;
+  border-radius: 10px; padding: 2px 8px; font-size: 11px; font-family: var(--mono);
+  cursor: pointer;
+}
+.picker-label { display: block; color: var(--text-dim); font-size: 12px; margin: 12px 0 6px; }
+.picker-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.picker-chip {
+  background: var(--bg); color: var(--text); border: 1px solid var(--border);
+  border-radius: 14px; padding: 6px 12px; font-size: 13px; cursor: pointer;
+}
+.picker-chip.on { color: #fff; background: var(--accent); border-color: var(--accent); }
+.picker-msg { color: var(--yellow); font-size: 12px; margin-top: 10px; }
+
+/* 渠道故障警告条 */
+.alert-banner {
+  display: flex; align-items: flex-start; gap: 8px;
+  padding: 8px 14px; font-size: 13px;
+}
+.alert-retry { background: #2b2313; color: var(--yellow); }
+.alert-failed { background: #3a1518; color: #ff9b9b; }
+.alert-unanswered { background: #3a1518; color: #ff9b9b; }
+.alert-icon { flex: none; }
+
 /* 回到底部气泡 */
 .jump-bottom {
   position: sticky; bottom: 8px; align-self: center;

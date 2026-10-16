@@ -8,6 +8,7 @@ import { MessageBubble } from "../components/MessageBubble.tsx";
 import { Composer } from "../components/Composer.tsx";
 import { ConfirmationCard } from "../components/ConfirmationCard.tsx";
 import { InboxBar } from "../components/Inbox.tsx";
+import { ModelPicker } from "../components/ModelPicker.tsx";
 import type { ConfirmationItem } from "@dorahub/shared";
 
 export function ConversationPage({ id }: { id: string }) {
@@ -22,6 +23,8 @@ export function ConversationPage({ id }: { id: string }) {
   const [convName, setConvName] = useState("");
   const [error, setError] = useState("");
   const [atBottom, setAtBottom] = useState(true);
+  const [agentInfo, setAgentInfo] = useState<{ provider?: string; modelId?: string; thinkingLevel?: string | null }>({});
+  const [agentTick, setAgentTick] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // 首次：HTTP snapshot；随后 WS attach
@@ -75,12 +78,40 @@ export function ConversationPage({ id }: { id: string }) {
     return unsub;
   }, [id]);
 
-  // 会话名
+  // 会话名 + 当前 agent（模型/思考强度）
   useEffect(() => {
     api.listConversations().then((cs) => {
       const c = cs.find((c) => c.id === id);
       if (c) setConvName(c.name || `会话 ${id}`);
     }).catch(() => {});
+    api.snapshot(id).then((snap) => {
+      const a = snap?.agent ?? {};
+      setAgentInfo({
+        provider: a.model?.provider,
+        modelId: a.model?.modelId,
+        thinkingLevel: a.thinkingLevel ?? null,
+      });
+    }).catch(() => {});
+  }, [id, agentTick]);
+
+  // agent_changed 事件同步选择器显示
+  useEffect(() => {
+    const unsub = wsClient.subscribe({
+      onFrame: (f) => {
+        if (f.t === "events" && f.conv === id) {
+          for (const ev of f.events as any[]) {
+            if (ev.type === "agent_changed") {
+              setAgentInfo({
+                provider: ev.agent?.model?.provider,
+                modelId: ev.agent?.model?.modelId,
+                thinkingLevel: ev.agent?.thinkingLevel ?? null,
+              });
+            }
+          }
+        }
+      },
+    });
+    return unsub;
   }, [id]);
 
   // 滚动跟随
@@ -111,9 +142,19 @@ export function ConversationPage({ id }: { id: string }) {
         <button className="btn ghost" onClick={() => navigate({ page: "conversations" })}>←</button>
         <div className="conv-title">
           <span className="conv-title-name">{convName}</span>
+          {agentInfo.modelId && (
+            <button className="model-tag" title="点击切换模型/思考强度">
+              {agentInfo.provider}:{agentInfo.modelId}
+            </button>
+          )}
           {state.status === "running" && <span className="badge-running">▶ 运行中</span>}
         </div>
         <div className="conv-actions">
+          <ModelPicker
+            convId={id}
+            current={agentInfo}
+            onConfigured={() => setAgentTick((n) => n + 1)}
+          />
           <button className="btn ghost" title="中止当前运行" onClick={() => api.abort(id).catch((e) => setError(e.message))}>
             ⏹
           </button>
@@ -135,6 +176,13 @@ export function ConversationPage({ id }: { id: string }) {
       </header>
 
       {error && <div className="error-banner" onClick={() => setError("")}>{error} ✕</div>}
+
+      {state.alert && (
+        <div className={`alert-banner alert-${state.alert.kind}`}>
+          <span className="alert-icon">{state.alert.kind === "retry" ? "⚠" : state.alert.kind === "failed" ? "✗" : "⛔"}</span>
+          {state.alert.text}
+        </div>
+      )}
 
       {confirmations.length > 0 && (
         <div className="confirm-zone">

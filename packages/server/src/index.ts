@@ -24,8 +24,8 @@ import { attachWs } from "./ws.ts";
 import { AuditLog } from "./audit.ts";
 import { createGuardExtension, loadGuardRules, type GuardRules } from "./guard.ts";
 import { ExecRegistry, loadExecutorsFromEnv } from "./exec/registry.ts";
+import { channelsFromEnv, installChannels, type ChannelConfig } from "./channels.ts";
 import { createRegistry } from "@earendil-works/pi-durable";
-import { installZjl } from "./zjl-provider.ts";
 import { createModels } from "@earendil-works/pi-ai";
 import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/node";
 
@@ -42,10 +42,10 @@ async function main() {
   const token = process.env.DORAHUB_TOKEN || undefined;
   const guardRulesPath = process.env.DORAHUB_GUARD_RULES ?? join(__dirname, "../../../guard-rules.json");
 
-  const zjlBaseUrl = process.env.ZJL_BASE_URL;
-  const zjlApiKey = process.env.ZJL_API_KEY;
-  if (!zjlBaseUrl || !zjlApiKey) {
-    console.error("FATAL: ZJL_BASE_URL / ZJL_API_KEY env required");
+  // 渠道：zjl 主渠道 + 智谱 trial/plan 备用渠道（均 OpenAI-completions）
+  const channels = channelsFromEnv();
+  if (channels.length === 0) {
+    console.error("FATAL: no channel configured (need ZJL_BASE_URL/ZJL_API_KEY or ZHIPU_*_KEY)");
     process.exit(1);
   }
 
@@ -62,7 +62,7 @@ async function main() {
 
   // 装配 harness（含 guard 扩展——guard 的确认回调由 WS 层注入，这里先占位再接）
   const models = createModels();
-  installZjl(models, zjlBaseUrl, zjlApiKey);
+  installChannels(models, channels);
 
   const registry = createRegistry();
   // CodingTools 在 startHarness 内安装；guard 扩展需要 registry.install
@@ -144,7 +144,7 @@ async function main() {
     const isApi = url.pathname.startsWith("/api/") || url.pathname === "/ws";
 
     const handle = isApi || !serveStatic
-      ? createRouter({ app, audit, version: VERSION, startedAt: Date.now(), token, execRegistry })(req, res)
+      ? createRouter({ app, audit, version: VERSION, startedAt: Date.now(), token, execRegistry, channels })(req, res)
       : (async () => {
           let filePath = join(webDist, url.pathname === "/" ? "index.html" : url.pathname.slice(1));
           if (!filePath.startsWith(webDist)) { res.writeHead(403).end(); return; }
@@ -155,8 +155,8 @@ async function main() {
             const isHashed = /-[A-Za-z0-9_-]{8}\./.test(filePath);
             res.writeHead(200, {
               "content-type": mimeTypes[extname(filePath)] ?? "application/octet-stream",
-              // HTML 不缓存（sw/浏览器都别存）；带 hash 的资产可永久缓存
-              "cache-control": isHtml ? "no-cache" : isHashed ? "public, max-age=31536000, immutable" : "no-cache",
+              // HTML 绝不存储（SW/HTTP 缓存都绕开，保证拿到最新资产名）；带 hash 的资产可永久缓存
+              "cache-control": isHtml ? "no-store" : isHashed ? "public, max-age=31536000, immutable" : "no-cache",
             });
             res.end(body);
           } catch {
