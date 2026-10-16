@@ -46,3 +46,17 @@
 - [ ] V-06：手机 Tailscale 与 v2ray 共存性（决定模式 A/B）
 - [ ] workpc 在 Tailscale 管理台改名 cyq → workpc（M4 配置 DORAHUB_EXEC_WORKPC_HOST 用）
 - [ ] M4 实机验证：workpc 开 Tailscale SSH → hub 配 exec envId → S5 剧本
+
+## 2026-10-16 更新：多渠道 + 手机切换（渠道冗余）
+
+新增能力（对应“zjl 渠道挂了手机怎么办”场景）：
+
+- 三渠道注册：zjl（grok-4.7/k3）+ 智谱 trial（glm-5.3 家族）+ 智谱 coding plan（glm-5.3）
+  - /etc/dorahub/env 追加 ZHIPU_TRIAL_KEY / ZHIPU_PLAN_KEY（从 workpc models.json 同步，0600）
+- /api/models 渠道目录；会话页 ⚙ 选择器：渠道→模型→思考强度，configure 即时生效
+- 渠道故障警告条：auto_retry/task_failed/unanswered 事件 + stopReason=error 的
+  assistant entry（401 等渠道错误的 durable 落点）→ 红条 + “建议切换渠道”指引
+- sw.js v2 修复：导航永不缓存（v1 会缓存 index.html 导致更新不生效）；HTML no-store
+
+验证：trial:glm-5.3-flash 直连智谱回复正常；UI 切 trial→zjl:grok-4.7+高思考生效；
+无效 key 的服务器上 UI 显示红警告条（401 令牌已过期）。云端已部署并验收。
