@@ -59,7 +59,7 @@ export function channelsFromEnv(): ChannelConfig[] {
       models: [
         {
           id: "grok-4.7", name: "grok-4.7", reasoning: true, input: ["text", "image"],
-          contextWindow: 500_000, maxTokens: 8192,
+          contextWindow: 500_000, maxTokens: 500_000,
           thinkingLevelMap: { off: null, minimal: null, low: "low", medium: "medium", high: "high", xhigh: "xhigh", max: null },
         },
         {
@@ -67,6 +67,18 @@ export function channelsFromEnv(): ChannelConfig[] {
           contextWindow: 262_144, maxTokens: 32_768,
           samplingParams: { temperature: 1 },
           thinkingLevelMap: { off: null, minimal: null, low: "low", medium: "medium", high: "high", xhigh: "xhigh", max: null },
+        },
+        {
+          // 2026-10-17：zjl 的 glm 网关已开通（此前 V-02 记录的"未开通"过时）；
+          // compat 与 ~/.pi/agent/models.json 的 zjl 条目完全一致（ZAI 协议）
+          id: "glm-5.3", name: "GLM-5.3", reasoning: true, input: ["text"],
+          contextWindow: 1_000_000, maxTokens: 131_072,
+          thinkingLevelMap: GLM_THINKING_MAP, compat: ZAI_COMPAT,
+        },
+        {
+          id: "glm-5.3-flash", name: "GLM-5.3-Flash", reasoning: true, input: ["text", "image"],
+          contextWindow: 1_000_000, maxTokens: 131_072,
+          thinkingLevelMap: GLM_THINKING_MAP, compat: ZAI_COMPAT,
         },
       ],
     });
