@@ -19,6 +19,8 @@ export interface ExecutorConfig {
   user?: string;
   port?: number;
   defaultCwd: string;
+  /** shell 路径（Windows 无 WSL 时给 Git Bash 绝对路径；缺省 = daemon 自探测） */
+  shellPath?: string;
 }
 
 /** 从环境变量扫描执行机：DORAHUB_EXEC_<ENVID>_HOST 等。 */
@@ -34,6 +36,7 @@ export function loadExecutorsFromEnv(): Map<string, ExecutorConfig> {
       user: process.env[`${prefix}_USER`],
       port: process.env[`${prefix}_PORT`] ? Number(process.env[`${prefix}_PORT`]) : undefined,
       defaultCwd: process.env[`${prefix}_CWD`] ?? ".",
+      shellPath: process.env[`${prefix}_SHELL`],
     });
   }
   return out;
@@ -74,6 +77,9 @@ export class ExecRegistry {
         connection: conn,
         id: `pi-env:${envId}`,
         cwd: target.cwd ?? cfg.defaultCwd,
+        // Windows 无 WSL 时的解法：显式指定 Git Bash（设计 07 W-b）；
+        // 不配则 daemon 自探测（Linux/装了 WSL 的机器）
+        ...(cfg.shellPath ? { shellPath: cfg.shellPath } : {}),
       });
     }
     return new NodeExecutionEnv({ cwd: target.cwd ?? this.opts.hubCwd });
