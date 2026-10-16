@@ -13,3 +13,4 @@ dev-*.sqlite
 audit.jsonl
 .dev-env.json
 dev-server.sh
+ts.json
