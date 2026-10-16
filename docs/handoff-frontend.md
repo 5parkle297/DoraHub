@@ -199,10 +199,12 @@ React 18.3 + Vite 6 + TS，**无 UI 组件库**（当初的决策是"简历叙�
 
 ### 执行机接入现状（2026-10-16 深夜，M4）
 
-- hub 的 `/etc/dorahub/env` 已配：`DORAHUB_EXEC_WORKPC_HOST=cyq`（管理台改名 workpc 待办）+ `DORAHUB_EXEC_LAPTOP_HOST=laptop`（未入 tailnet，离线显示）
-- `/api/executors` 返回三台：hub（在线）/ workpc（离线，等 sshd）/ laptop（离线）
-- **workpc 开通步骤**（等用户手动）：装 OpenSSH Server（上面坑 9 的命令）→ hub 上验证 `sudo -u dorahub ssh shiyu@cyq whoami`（首次要处理 host key）→ 新建会话选 workpc → 发个 `bash: ls D:/hobby` 验证远程执行
-- laptop 入网：装 Tailscale 客户端登录同账号 → MagicDNS 名改 laptop → 自动在线
+- ✅ **workpc 已实测接通（US-06 通过）**：`hostname`→cyq、`uname -s`→MSYS_NT（Git Bash）、输出流式回传。链路 = hub 出站 SSH（原生 OpenSSH，非 Tailscale SSH）→ pi-env daemon 自动部署 → shellPath 指定 Git Bash
+- hub `/etc/dorahub/env` 完整配置：`DORAHUB_EXEC_WORKPC_HOST=cyq` + `_USER=shiyu` + `_CWD=D:/hobby` + `_SHELL=D:/EESoftware/Git/usr/bin/bash.exe`；laptop 同格式已注册（未入 tailnet，离线显示）
+- 认证：专用 key `/etc/dorahub/id_ed25519`（dorahub 用户持有），公钥在 workpc 的 `C:\ProgramData\ssh\administrators_authorized_keys`（管理员组用户不读 ~/.ssh/authorized_keys——Windows OpenSSH 的 Match Group administrators 行为）
+- known_hosts：`/var/lib/dorahub/known_hosts`，hostKeyAlias `pi-env-workpc`（ssh-keyscan 预扫，免首次交互）
+- **Windows 无 WSL 的坑**：System32 的 bash.exe 是 WSL 启动器；workpc 未装 WSL → daemon 自探测命中 wsl.exe 报错。解法 = `DORAHUB_EXEC_<ID>_SHELL` 钉死 Git Bash 绝对路径（D:/EESoftware/Git/usr/bin/bash.exe，非标准安装路径也不在 PATH）
+- laptop 入网步骤：装 Tailscale 登录同账号 → MagicDNS 名改 laptop → 装 OpenSSH Server + 放公钥（同 workpc 流程）→ 自动在线
 
 ## 7. 验收基线（改完后这些必须仍然通过）
 
