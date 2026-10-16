@@ -459,6 +459,32 @@ body {
 .picker-chip.on { color: #fff; background: var(--accent); font-weight: 600; }
 .picker-msg { color: var(--yellow); font-size: var(--fs-sm); margin-top: var(--sp-3); }
 
+/* /model 式模型列表 */
+.model-search {
+  margin-bottom: var(--sp-2);
+}
+.model-list {
+  max-height: 300px; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 4px;
+  padding-right: 2px;
+}
+.model-row {
+  display: flex; align-items: center; gap: var(--sp-2);
+  background: var(--bg-sunken); border: none; border-radius: var(--r-md);
+  padding: 8px 12px; cursor: pointer; text-align: left;
+  font-family: var(--sans); color: var(--text);
+}
+.model-row:hover { background: var(--bg-hover); }
+.model-row.on { background: var(--accent-soft); }
+.model-row-ref { font-family: var(--mono); font-size: var(--fs-sm); font-weight: 600; }
+.model-row.on .model-row-ref { color: var(--accent-text); }
+.model-row-name { color: var(--text-dim); font-size: var(--fs-sm); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.model-row-tag {
+  font-size: var(--fs-xs); color: var(--blue); background: var(--blue-soft);
+  border-radius: var(--r-pill); padding: 1px 8px; flex: none;
+}
+.model-row-check { color: var(--accent); flex: none; font-weight: 700; }
+
 /* ---- 渠道故障警告条 ---- */
 .alert-banner {
   display: flex; align-items: flex-start; gap: var(--sp-2);

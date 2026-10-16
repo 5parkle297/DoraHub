@@ -159,8 +159,8 @@ export function ConversationPage({ id }: { id: string }) {
             onSwitched={(v) => setEnvId(v)}
           />
           {agentInfo.modelId && (
-            <button className="model-tag" title="点击切换模型/思考强度">
-              {agentInfo.provider}:{agentInfo.modelId}
+            <button className="model-tag" title="点击切换模型（/model）">
+              {agentInfo.provider}/{agentInfo.modelId}
             </button>
           )}
           {state.status === "running" && <span className="badge-running">▶ 运行中</span>}
