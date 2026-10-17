@@ -1,311 +1,199 @@
-# DoraHub 前端交接文档（给下一个会话）
+# DoraHub 交接文档 v2（给下一个前端/全栈会话）
 
-> 写于 2026-10-16，同日晚补充 §0.5（用户两条核心新诉求，**优先级高于本文其他一切 backlog**）。本文是"专门改前端"会话的唯一入口文档。先读本文，再按需读引用文件。
-> 后端（hub server）原则上**不要动**——它已部署在生产（https://hub.tail242752.ts.net）且验收通过。唯一例外：§0.5-B 会话管理所需的 conv-meta 小改，范围以该节为准。
+> 写于 2026-10-17 深夜，全面重写（v1 的过时内容已清理）。本文是唯一入口文档：先读完本文再动手。
+> **历史成果速览**：M0-M4 全部完成并上线——设计系统 v2（暖纸浅色）、自动会话命名、三执行机远程执行（workpc/laptop/hub）、跨机工作区迁移、pi CLI 会话管理中心（导入/删除/搬运）、`/model` 式模型选择器。线上 https://hub.tail242752.ts.net 。
+> **本文档结构**：§1 怎么跑起来 → §2 系统现状全景 → §3 API/协议速查（含大坑）→ §4 代码地图 → §5 backlog（按优先级）→ §6 坑清单 → §7 验收基线 → §8 发版流程 → §9 自由度与规划建议。
 
-## 0. 一句话背景
-
-DuraHub→DoraHub：跨设备持久化 agent 平台。会话状态住云端 hub（阿里云 Ubuntu，pi-durable + SQLite），任何设备浏览器接入同一会话；流式输出、steer 插话、崩溃恢复、权限确认、多渠道模型切换。**M1-M3 里程碑已完成，M4 代码就绪待实机验证**。前端目前是"能用但丑"的毛坯房。
-
-## 0.5 用户最新核心诉求（2026-10-16 晚补充，最高优先级）
-
-> **✅ 2026-10-16 深夜更新：本节 A/B 两块已在本会话全部完成并验收**（详见 ADR-010）：
-> - A 设计语言：暖纸浅色默认 + 自动深色、token 体系、去边框堆叠；markdown/diff/自动增高 composer 已实现
-> - B 会话管理：免命名新建、AutoNamer 自动标题+描述+关键词（conv_meta 帧实时推送）、按项目分组、列表补 model/cwd、root 隐藏
-> - 验收：S1-S5 + ws-test 15 项全过；重启后元数据持久化验证通过
-> - **下个会话不需要重做本节**，从 §5 剩余项（usage 面板、宽屏两栏、PWA 图标、Web Push 等）继续
-
-用户在收工后又提了两条硬需求，原定排在 §5 所有条目之前。
-
-### A. 设计语言重做——"我一点都不喜欢程序员黑"
-
-用户原话：「美化 ui，现在主题就是程序员黑，以及方圆框，很丑，我一点都不喜欢程序员黑，你多去看看优质的前端项目」。
-
-- **默认浅色主题**。现在的纯黑终端风是用户明确否掉的，不能保留为默认（要不要留深色可选、是否跟随系统，你决策，ADR-010 记录）。
-- "方圆框很丑" = 现在到处是 1px 边框的生硬方框（style.css 里 border 堆叠）。用**底色分层 + 柔和阴影 + 统一圆角**替代边框堆叠，降低视觉噪音。
-- 先建**设计 token 体系**（色板/字号层级/间距/圆角/阴影，CSS variables 或 tailwind），再逐组件重做，别零敲碎打。
-- 参照系（用户点名"多去看看优质的前端项目"）：Linear（信息密度与秩序感）、claude.ai（对话产品气质，浅色做得很好）、Things 3 / Cron（清爽清单类）、Vercel dashboard。别做成另一个 hacker 风。
-- 设计语言全权委托已给（§9），但**用户审美否决项**必须遵守：拒绝程序员黑、拒绝生硬边框方框。
-
-### B. 会话管理重做——免命名新建 + 自动标题 + 项目分组
-
-用户原话拆成四条需求：
-
-1. 「新建就新建，**不需要我手动命名**」——现在 Conversations.tsx 的新建弹窗强制填名字（`if (!name.trim()) return`），**删掉命名步骤**。新建时可选项目文件夹（cwd），选完直接进会话。
-2. 标题「**实时更新**，很简短，概括内容，就像 claude code 和 codex 一样」——首条用户消息后自动生成 ≤6 词短标题，随对话演进刷新（有节流，别每轮都烧 token）。
-3. 会话卡片底下要有一段 **description / 几个关键词**，概括「向 agent 提的关键问题/关键任务」。动机（用户原话）：「一个文件夹就是一个项目，项目底下很多任务，任务一多我就忘了哪个会话安排了什么；很长时间后想接着做，就不知道在哪个会话里做过」——**会话管理是你要思考的最大问题**，列表页就是"回看每个项目做过什么"的入口。
-4. 「列表就是我之前的会话**以及其所属的工作文件夹**」——列表按 cwd 分组展示（组头 = 项目名 basename + 完整路径 tooltip，组内按 updatedAt 倒排）。
-
-**现状差距**：列表 API 的 model/cwd 恒 null（http-api.ts 里的 TODO）；ConvMetaDoc 只有 name/createdAt/envId（packages/server/src/conv-meta.ts）；configure API 已能 setName；无任何自动生成逻辑。
-
-**技术方向**（这是允许动后端的唯一范围，都在 conv-meta/元数据层，别碰 harness 内核与事件流协议语义）：
-
-- server：首条用户消息的 turn_end 后，**异步**调便宜渠道（trial:glm-5.3-flash，免费但慢 1-2 分钟，后台跑无所谓）生成 JSON `{title, description, keywords[3-5]}`，写 ConvMetaDoc（defineDoc version 升级加字段）。输入 = 最近几条用户消息，prompt 对标 Claude Code 的会话命名。**节流**：首次必生成，之后每 N 轮用户消息刷新一次；并发加锁；失败静默 catch（回退 = 首条消息截断预览，现状已有）。
-- server：conversations 列表 API 填充 cwd（从 agent 配置接出来）+ 新元数据字段；元数据更新后推事件给前端（shared/index.ts 加帧类型）——列表页和会话页 header 都要**无刷新**换标题。
-- web：新建流程去弹窗（可选 cwd：下拉最近用过 + 手输）；列表按 cwd 分组 + 相对时间（"3 分钟前"）；卡片 = 自动标题 + description/关键词 chips + 时间 + running 徽章。
-- 兼容：ConvMetaDoc schema 变更要对已有线上会话做迁移兼容。
-
-**验收加一条 S5**（见 §7）：新建全程无命名步骤 → 发一条消息 → 标题后台生成完成后自动从"未命名"变短标题（无刷新）；列表按项目文件夹分组。
-
-## 1. 必读文件（按顺序）
-
-| 文件 | 内容 |
-|---|---|
-| `design/README.md` + `design/00-*.md` | 项目全貌、ADR 决策记录（前端相关：ADR-003 PWA 形态、ADR-004 事件流协议） |
-| **`design/06-web-client.md`** | **前端设计规范**——注意里面很多规划没实现（diff 组件、增量 markdown、虚拟列表、degraded 轮询），那就是你的 backlog |
-| `packages/shared/src/index.ts` | 协议单一定义源（HTTP 类型 + WS 帧） |
-| `packages/web/src/` | 现有前端全部代码（见 §4） |
-| `docs/deployment-log.md` | 部署实录（怎么发版到云端） |
-| 本文档 | 现状 + 坑 + backlog |
-
-## 2. 开发环境（workpc，Windows）
+## 1. 开发环境（workpc，Windows）
 
 ```bash
 # 终端 1：server（127.0.0.1:8787）
-# key 从 C:/Users/shiyu/.pi/agent/models.json 的 providers 里取（zjl / zhipu-glm-trial / zhipu-glm-coding-plan）
 cd D:/hobby/pi-durable
-ZJL_BASE_URL=https://zjl-oneapi.vul337.team:8443/v1 \
-ZJL_API_KEY=<models.json 里 zjl.apiKey> \
-ZHIPU_TRIAL_KEY=<zhipu-glm-trial.apiKey> \
-ZHIPU_PLAN_KEY=<zhipu-glm-coding-plan.apiKey> \
-DORAHUB_DB=./dev.sqlite DORAHUB_CWD=$PWD \
-node packages/server/dist/index.js
+bash dev-server.sh    # key/executors 环境变量都在里面了（读 ~/.pi/agent/models.json 配好）
+# 前置：先 node packages/server/build.mjs 重建 dist
 
-# 终端 2：vite dev（:5173，proxy /api 和 /ws 到 8787）——改前端用这个，热更新
-npm run dev:web
-# 浏览器开 http://127.0.0.1:5173
+# 终端 2：前端热更新
+npm run dev:web       # vite dev :5173，proxy /api /ws → 8787
 ```
 
-- server 改动后要 `node packages/server/build.mjs` 重建 dist 再重启（esbuild）
-- 前端构建：`npm run build -w packages/web` → 产物 `packages/web/dist/`，server 会托管它
-- 类型检查：`cd packages/web && npx tsc -b --noCheck`；server：`cd packages/server && npx tsc --noEmit`
-- 真实模型会花钱：测试用 glm-5.3-flash（智谱 trial 渠道）最便宜，但注意智谱直连**响应偏慢**（1-2 分钟，免费档限速，不是 bug）
-- git：repo 在 `D:/hobby/pi-durable`，remote = github.com/5parkle297/DoraHub（main）。commit 用 `git -c user.name="shiyu" -c user.email="shiyu@local"`
+- ⚠️ **本地 dev 的 SSH 到 workpc/laptop 会失败**（dev key 未放进 administrators_authorized_keys）。修法：管理员 PowerShell 跑
+  `Add-Content -Path C:\ProgramData\ssh\administrators_authorized_keys -Value "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICQj3ChrURhmPuPK9AdS+/Gage8szI0aqQdTed0VQQ9c dev-dorahub"`
+  （公钥在 `.dev-ssh/id_ed25519.pub`，私钥已 gitignore）。不修也行：**执行机相关功能直接在云端测**（云端 key 全通）。
+- 类型检查：web `cd packages/web && npx tsc -b --noCheck`；server `cd packages/server && npx tsc --noEmit`
+- 测试模型：trial/glm-5.3-flash 免费但慢（1-2 分钟是限速不是 bug）；zjl/grok-4.7 快
+- git：`git -c user.name="shiyu" -c user.email="shiyu@local"` commit；remote = github.com/5parkle297/DoraHub（main）
+- 回归：`node --experimental-strip-types scripts/ws-test.ts`（15 项，需 server 在 8787）
 
-## 3. 后端 API 与协议（已稳定，直接消费）
+## 2. 系统现状全景（2026-10-17）
 
-### HTTP（全部 JSON，snake-free 小写驼峰）
+### 用户视角的功能清单（全部已上线）
 
-| 方法 路径 | 用途 | 备注 |
+| 功能 | 状态 | 备注 |
 |---|---|---|
-| GET `/api/health` | 探针 | |
-| GET `/api/models` | 渠道目录 | `[{id,name,models:[{id,name,reasoning,thinkingLevels[]}]}]`，三渠道：zjl/trial/plan |
-| GET `/api/conversations` | 会话列表 | `[{id,name,status,model,cwd,updatedAt,lastPreview}]`（model/cwd 目前恒 null，TODO） |
-| POST `/api/conversations` | 创建 | body `{name?, cwd?, model?, envId?}`；model 格式 `"provider:modelId"`（如 `"trial:glm-5.3-flash"`） |
-| GET `/api/conversations/:id/snapshot` | 全量快照 | 重连/晚加入用它重建（服务端不重放历史） |
-| POST `/api/conversations/:id/messages` | 发消息 | body `{content, mode:"input"|"steer", requestId?}`；requestId 幂等 |
-| POST `/api/conversations/:id/abort` | 中止 | |
-| POST `/api/conversations/:id/configure` | 改配置 | body `{model?:{provider,modelId}, thinkingLevel?, cwd?, instructions?, name?, envId?}` |
-| POST `/api/conversations/:id/fork` | 分叉 | body `{entryId?}` 缺省=最新 |
-| GET `/api/confirmations` | 待确认列表 | |
-| POST `/api/confirmations/:id` | 回答 | body `{approved:bool}` |
-| GET `/api/executors` | 执行机 | M4：hub 本地 + 配置的远程机 |
+| 会话列表：自动命名/描述/关键词 | ✅ | AutoNamer 服务端异步生成，conv_meta 帧实时推送 |
+| 按项目分组 + 相对时间 + 执行机徽章 | ✅ | 列表 API 带 model/cwd/envId |
+| 免命名新建（选执行机 + 项目路径） | ✅ | 离线机器灰化可选 |
+| 会话软删除（卡片 ✕） | ✅ | ConvMetaDoc.hidden，数据保留 |
+| `/model` 式模型选择器 | ✅ | 平铺 provider/model + 搜索 + 思考强度，10 个模型与 pi 完全对齐 |
+| 执行机切换 + 工作区迁移向导 | ✅ | harvest→中转搬运(50MB/文件,200MB总量)→校准提示预填 composer |
+| pi 会话管理中心 | ✅ | 扫描(1条SSH命令+5min缓存)/元数据生成/导入对话/删除/搬运 |
+| markdown 渲染 / edit diff / 自动增高 | ✅ | 自写轻量实现（ADR-010） |
+| 双设备同步 / steer / 确认卡 / 重连 | ✅ | S1-S4 验收基线 |
+| 移动端弹窗（portal 修复）/ 键盘适配 | ✅ | backdrop-filter containing block 大坑见 §6 |
 
-### WebSocket `/ws`
+### 执行机（M4，全部实测通过）
 
-- 连接后服务端发 `{t:"hello",serverId,proto:1}`；客户端发 `{t:"attach",conv}` 订阅，服务端回 `{t:"snapshot",conv,snapshot}`，之后推 `{t:"events",conv,events[]}`
-- 其他服务端帧：`conv_status`（running/idle 广播给所有人）、`confirmation`/`confirm_resolved`、`pong`、`bye`、`error`
-- 客户端帧：`attach`/`detach`/`ping`
-- 心跳：server 20s ping / 40s 无 pong 踢；客户端指数退避重连（1s→30s），重连成功后**重拉 snapshot**（ws.ts 已实现）
+| envId | 机器 | 用户 | cwd | shell | 状态 |
+|---|---|---|---|---|---|
+| hub | 阿里云 VM | - | /opt/dorahub | - | 在线 |
+| workpc | cyq（管理台改名 workpc 待办） | shiyu | D:/hobby | D:/EESoftware/Git/usr/bin/bash.exe | 在线 |
+| laptop | sh1gure | shigure | F:/group | D:/Software/Git/usr/bin/bash.exe | 按开机 |
 
-### 事件流（events[] 里的事件类型 = pi-durable watchEvents 透传）
+链路：hub 出站 SSH（原生 OpenSSH，**Tailscale SSH 不支持 Windows**）→ pi-env daemon 自动部署 → RemoteExecutionEnv（shellPath 钉 Git Bash + shellEnv 注入 PATH）。
+密钥：`/etc/dorahub/id_ed25519`（hub），公钥在两台 Windows 的 `C:\ProgramData\ssh\administrators_authorized_keys`（管理员组用户不读 ~/.ssh）。
 
-`snapshot / run_start / run_end / turn_start / turn_end / message_start / message_update / message_end / tool_execution_start / tool_execution_update / tool_execution_end / inbox_update / submission / entry_appended / agent_changed / usage_changed / auto_retry_start / auto_retry_end / deferred_poll / task_failed / compaction_start / compaction_end`
+### 数据与缓存
 
-**⚠️ entry 数据结构（本会话踩过的大坑，.d.ts 之外的事实）**：
+| 数据 | 位置 | 治理 |
+|---|---|---|
+| durable 会话 | hub `/var/lib/dorahub/agent.sqlite` | pi-durable 管理，只增不删 |
+| pi 会话元数据 | `/var/lib/dorahub/pi-session-meta.json` | 原子写/90天过期/500条上限 |
+| 审计日志 | `/var/lib/dorahub/audit.jsonl` | 5MB 轮转（.1） |
+| 执行机探测缓存 | hub 内存（30s 节流，60s 新鲜窗口） | /api/executors 秒回 |
+| pi 会话列表缓存 | hub 内存（5 分钟） | meta 实时回填不受缓存影响 |
+
+## 3. API / 协议速查
+
+### HTTP（在 §3 基础上新增的部分；旧的见 git 历史 v1）
+
+| 方法 路径 | 用途 |
+|---|---|
+| DELETE `/api/conversations/:id` | 软删除（hidden） |
+| POST `/api/conversations/:id/transfer` | 工作区跨机迁移 `{targetEnvId, targetCwd}` → `{report, notice}` |
+| GET `/api/executors` | 三台执行机 + 缓存在线状态（秒回，后台刷新） |
+| GET `/api/pi-sessions?env=` | 扫描某机 pi 会话（含生成元数据 title/description/keywords） |
+| POST `/api/pi-sessions/import` | pi 会话 → durable 会话 `{sourceEnvId, dir, file}` → `{convId}` |
+| POST `/api/pi-sessions/delete` | 删源机 .jsonl |
+| POST `/api/pi-sessions/transfer` | pi 会话跨机搬运 `{sourceEnvId,file,dir,targetEnvId,targetCwd}` |
+
+列表返回：`{id,name,status,model,cwd,updatedAt,lastPreview,description,keywords,envId}`（不再是恒 null）。
+
+### WS 帧（新增）
+
+- `conv_meta`：`{conv,name,description,keywords,envId}` —— 自动命名/改名/切机实时推送
+
+### entry 结构大坑（不变，必读）
+
+内容在 **`model[0]`** 不在 `data`；pi.user 的 content 是字符串，pi.assistant 是 blocks 数组（text/thinking/toolCall）；渠道错误 = stopReason:"error" + errorMessage。
+
+**新增坑**：自定义 doc（dorahub.meta）**不在 `viewState().docs`**（只有 pi.* builtin），读用 `harness.documentState(token, conv.id, context)`，conversationId 必须传 Conversation handle 的 id。
+
+## 4. 代码地图（packages/）
 
 ```
-pi.user:        { model: [{ role:"user", content: "字符串", ... }], kind, id, ... }
-pi.assistant:   { model: [{ role:"assistant", content: [blocks], stopReason, errorMessage?, ... }] }
-                 blocks: {type:"text",text} | {type:"thinking",thinking} | {type:"toolCall",id,name,arguments}
-pi.tool-result: { model: [{ role:"toolResult", toolCallId, toolName, content:[{type:"text",text}], isError, durationMs }], data:{diagnostics} }
-pi.system:      工具声明等，UI 可忽略
+shared/src/index.ts        # 协议单一定义源（HTTP 类型 + WS 帧 + ExecutorInfo）
+server/src/
+  index.ts                 # 装配：harness+guard+executors+channels → HTTP+WS+静态托管
+  dorahub.ts               # ★ 应用层：会话注册表/事件扇出/确认队列/迁移编排/pi导入入口
+  harness.ts channels.ts   # harness 装配 / 多渠道注册（zjl+trial+plan 共10模型）
+  conv-meta.ts             # ConvMetaDoc v4（name/desc/keywords/envId/hidden/sourcePiKey）
+  auto-namer.ts            # 会话自动命名（首条消息后异步生成，节流+手动名保护）
+  workspace-harvest.ts     # 从会话历史挖 read/write/edit 文件清单
+  transfer.ts              # 工作区跨机搬运 + 校准提示生成
+  pi-sessions.ts           # pi 会话扫描（1条SSH复合命令+缓存）/元数据/删除/搬运
+  pi-import.ts             # pi jsonl → durable entries 导入器（appendEntry 逐个 await！）
+  exec/registry.ts         # 执行机注册表：SSH连接/probe(5s超时)/buildForEnv(cwd=null→home)
+  guard.ts audit.ts ws.ts http-api.ts
+web/src/
+  pages/Conversations.tsx  # 列表页：分组卡片/新建向导/软删除 + PiSessionsSection
+  pages/Conversation.tsx   # 会话页：header(env标签+model标签+⚙⏹⑂)/确认卡/inbox/警告条
+  components/
+    PiSessions.tsx         # pi 会话区：扫描列表/导入/删除/搬运向导（metaReady 轮询刷新）
+    EnvSwitcher.tsx        # 执行机切换+迁移向导（transferring/done/error 相位）
+    ModelPicker.tsx        # /model 式平铺列表+搜索+思考强度
+    Modal.tsx              # ★ 共享弹窗（createPortal 到 body——backdrop-filter 坑的解药）
+    Markdown.tsx           # 自写增量渲染（流式只重解析尾段）
+    MessageBubble/ToolCard/Composer/Inbox/ConfirmationCard
+  state/conv.ts            # ★ reducer：applySnapshot/applyEvents/pushEntry
+  style.css                # 设计 token（暖纸浅色默认+自动深色）+ 全部样式
 ```
 
-- 内容在 **`model[0]`**，不是 `data` 字段！
-- 渠道错误（401/限流）最终落成 `stopReason:"error"` + `errorMessage` 的 assistant entry → 前端红色警告条就是这么触发的
-- message_update 的 changes：`text_delta/thinking_delta`（追加）、`toolcall_start/toolcall_delta`（参数流式累积）
+架构纪律（ADR-004/010）：**事件流驱动 reducer、snapshot 全量替换、无全局状态库、不引 UI 组件库**。可以优化结构，别推翻语义。
 
-## 4. 前端现状（packages/web/src/）
+## 5. Backlog（按优先级，含规划建议）
 
-```
-main.tsx              # 入口 + SW 注册
-App.tsx               # connbar（连接状态条）+ 路由分发 + degraded 5s 轮询
-route.ts              # 手写 hash 路由：#/conversations、#/conversations/:id
-ws.ts                 # WS 单例类：状态机 connecting/syncing/live/degraded/error，重连，attach 重放
-api.ts                # fetch 封装（token 注入预留，localStorage 'durahub.token'）
-state/conn.tsx        # AppProvider（连接状态 context）
-state/conv.ts         # ★ 核心 reducer：applySnapshot / applyEvents / pushEntry（entry 结构在这里）
-pages/Conversations.tsx  # 列表页 + 新建弹窗 + running 徽章
-pages/Conversation.tsx   # 会话页：快照→事件→渲染；确认卡；inbox 条；警告条；ModelPicker
-components/
-  MessageBubble.tsx   # 气泡 + thinking 折叠 + 工具卡挂载
-  ToolCard.tsx        # bash/read/write/edit 分型标题 + 流式输出（没做 diff）
-  Composer.tsx        # 输入区 + steer 开关 + 发送
-  ConfirmationCard.tsx # 权限确认（允许/拒绝）
-  Inbox.tsx           # 排队消息条
-  ModelPicker.tsx     # 渠道→模型→思考强度三级 chips 弹窗（configure 即时生效）
-style.css             # 手写深色主题（全部样式都在这一个文件）
-```
+### P0 用户明确等着的
+- [ ] **宽屏两栏**：>768px 列表常驻左栏（design/06 §5 原计划，一直没做；现在列表页功能多了更需要）
+- [ ] **UI 收敛**（用户原话"越来越臃肿"）：设置页（执行机管理/渠道状态收进去）、会话页 header 菜单合并
+- [ ] 手机接入：NovaScale（iOS 内置 libtailscale 的第三方客户端）实测 + V-06 回写；或 Funnel+token 方案（ADR-007 要求开 token，api.ts 的 localStorage 'durahub.token' 已预留，缺登录 UI + 401 全局处理）
 
-状态管理无全局库：每会话一个 reducer（`state/conv.ts`），WS 单例订阅挂在页面组件里。**这个架构本身没问题，别推翻**（ADR：事件流就是状态机）。
+### P1 功能缺口（design/06 规划未做）
+- [ ] usage/cost 面板（usage_changed 已在 reducer）
+- [ ] compaction 提示标记
+- [ ] fork 选点（消息上任意点分叉，现只能最新处）
+- [ ] 会话配置编辑（cwd/instructions 的 UI，configure API 已支持）
+- [ ] 会话页 degraded 兜底（WS 断时 5s 轮询只有列表页有）
+- [ ] 虚拟列表（entries 过千性能）
+- [ ] PWA：PNG 图标（iOS 主屏）、Web Push（M5：渠道挂了手机推送）
 
-React 18.3 + Vite 6 + TS，**无 UI 组件库**（当初的决策是"简历叙事是自建平台"，但你可以重新提案引入轻量方案——改 ADR-010 记录即可，见 design/00 的 ADR 格式）。
+### P2 打磨
+- [ ] thinking 流式时的"思考中"动效区分
+- [ ] 图片消息展示（read 工具返回图片时）
+- [ ] pi 导入的 system 消息处理（当前跳过 preamble，扩展消息如 <system_warning> 类原样导入）
 
-## 5. 已知问题 / 丑点清单（按用户视角排序）
+## 6. 坑清单（血泪，别再踩）
 
-> 2026-10-16 晚：视觉整块已被 §0.5-A 升级取代（要求更高：浅色默认 + 设计 token 体系）；"列表页很空"一条并入 §0.5-B。下面是原始快照，其余条目照做。
+1. **弹窗必须走 Modal.tsx（createPortal）**：conv-header 有 backdrop-filter，CSS 规范下它是 fixed 后代的 containing block——不 portal 的弹窗会被钉在 header 的 50px 高度里溢出屏幕（实测 top:-175px）
+2. entry 内容在 `model[0]`；自定义 doc 用 documentState 读（§3）
+3. **JS 模板字符串里 `\xNN` 会被解释成真控制字节**：发给 daemon 的命令含 NUL 直接被拒（"nul byte found"）；要传文本 `\xNN` 给远端 bash 必须写 `\\xNN`。且注意：源文件含真控制字节会被 git 当二进制（diff 全废）
+4. **daemon 文件操作不走 shell**：readTextFile/writeFile 是独立通道（无 32K 命令行限制）；shell exec 的结果要用 `onOutput` 回调收（ShellExecResult 无 output 字段）
+5. RemoteExecutionEnv 的 cwd 必须是**目标机上真实存在的路径**（`~`/`/tmp` 都不行，Windows 上用 daemon info.home——`buildForEnv(envId, null)` 已封装）
+6. Windows 命令行 32K 限制：大文件搬运必须走 daemon 文件 API
+7. 管理员组用户的 SSH 公钥在 `C:\ProgramData\ssh\administrators_authorized_keys`（不读 ~/.ssh/authorized_keys）
+8. laptop 实际用户目录是 `C:\Users\shigu`（不是 shigure）；SSH 默认 shell 是 cmd.exe（ls/head 不可用），pi-env exec 走 Git Bash
+9. **ConversationInit 里 appendEntry 必须逐个 await**（"commit settled before pending Tx operations"）
+10. pi 会话目录编码：`--D--hobby--` ← 去首分隔符、`/\:` 全换 `-`（encodeDir/decodeDir 已有）
+11. sw.js 缓存：改前端后浏览器**关 tab 重开**才换 bundle；开发用 vite dev 避开
+12. Windows curl 中文 GBK 乱码（用 python -X utf8）；`nul` 保留名垃圾文件会在 add -A 时炸 git（已 gitignore，仍要留意）
+13. browser-eval 的 `location.reload()` 会毁掉当前 eval 上下文；React 受控组件要用 native setter + dispatchEvent
+14. **发版脚本引号地狱**：`python scripts/hub.py "长命令"` 里嵌 python3 -c 会炸——分步执行或写临时脚本上传
+15. node -e / bash -c 里写中文代码补丁会 GBK 炸——补丁脚本写 .cjs 文件（UTF-8）再执行
+16. 智谱直连慢（1-2 分钟）是限速常态；zjl grok-4.7 快
 
-### 视觉（用户原话："太丑了"）
-- [ ] 整体没有设计语言：字体层级、间距、色彩不成体系；深色主题但对比度没调过
-- [ ] 列表页很空：没有图标/时间分组/最后活动相对时间（"3 分钟前"）
-- [ ] 会话页 header 信息密度低，model-tag 像调试信息
+## 7. 验收基线（改完必须仍然全过）
 
-### 功能缺口（design/06 里规划了但没做）
-- [ ] **markdown 渲染**：msg-text 现在是纯文本 `pre-wrap`！代码块/列表/链接全是原文。规划是"增量段落渲染"（每消息维护已完结段落+当前段落 buffer，防全量重解析）
-- [ ] **edit 工具的 diff 视图**：ToolCard 只显示 JSON args 和输出。design 06 §6 要求两栏 diff（自己写或用库，讲清取舍）
-- [ ] **usage/cost 面板**：usage_changed 事件已在 reducer 里，没展示（tokens/渠道统计）
-- [ ] **compaction 提示**："历史已压缩"标记（compaction_start/end 事件）
-- [ ] **fork 选点**：只能在最新 entry fork；规划是消息上选任意点分叉
-- [ ] **虚拟列表**：entries 过千的性能（react-window 或自写）
-- [ ] **会话配置编辑**：cwd / instructions 没有编辑 UI（configure API 已支持）
-- [ ] **degraded 模式完善**：WS 断但 HTTP 可用时 5s 轮询只有列表页 tick，会话页没兜底
-- [ ] thinking 展示太素：流式中没有"思考中"动效区分
+- S1 双设备同会话实时流式；S2 steer 排队生效；S3 确认卡拒绝→工具 blocked；S4 kill server→30s 内重连恢复
+- S5 新建免命名→自动标题实时出现→列表按项目分组带关键词
+- S6 模型切换（⚙ 选 trial/glm-5.3-flash → header 更新 → 新渠道回复）
+- S7 执行机：新建选 workpc → bash hostname 返回 cyq；跨机迁移带文件
+- S8 pi 会话：扫描出带摘要的列表 → 导入 → agent 记得原上下文
+- `ws-test.ts` 15 项全过
+- 手机关 tab 重开验证 SW 更新
 
-### 交互/移动端
-- [ ] 输入框自动增高（现在是 max-height 固定）
-- [ ] 虚拟键盘弹出时 visualViewport 适配（design 06 §5）
-- [ ] 长按/滑动手势（touch-action 处理）
-- [ ] 桌面端宽屏布局（>768px 列表常驻左栏，design 06 §5 说的两栏）
-- [ ] 图片消息展示（read 工具返回图片时——zjl grok-4.7 支持读图，input 含 image 的模型）
-
-### PWA
-- [ ] manifest 图标只有 SVG（iOS 添加主屏需要 PNG 192/512）
-- [ ] Web Push（M5 项，iOS 16.4+）：渠道挂掉时手机推送红警告——用户明确表达过这个需求
-
-## 6. 坑清单（本会话踩过的，别再踩）
-
-1. **sw.js v2 缓存策略**：只缓存带 hash 的资产，导航/HTML 永不缓存。改前端后浏览器验证要**关 tab 重开**（同 URL 的 hash 导航不触发 reload）；开发时用 vite dev server 避开一切缓存问题
-2. **entry 内容在 `model[0]`**，不在 `data`（§3 已详述）
-3. **Windows curl 发中文会 GBK 乱码**（模型会收到乱码并吐槽）：测中文用浏览器或 python（`python -X utf8`）
-4. **React 受控组件自动化测试**：直接设 `.value` 不触发 onChange，要用 native setter + dispatchEvent（browser-eval 里已有现成模式，见下）
-5. browser-tools skill 的 `browser-nav.js --new` 可能复用已有同 URL tab 不刷新——要验证新版本加载时先 `curl -s <origin>/ | grep index-` 对比页面里 `[...document.scripts].map(s=>s.src)`；Chrome 调试端口 9222 的启动命令：`"C:/Program Files/Google/Chrome/Application/chrome.exe" --remote-debugging-port=9222 --user-data-dir="C:/Users/shiyu/.cache/browser-tools/profile" --no-first-run about:blank`（skill 的 browser-start.js 在 Windows 上有 mkdir -p bug）
-6. server 静态托管路径：源码运行 vs dist 运行探测两个候选（index.ts 里 webDistCandidates），别只改一边
-7. 智谱直连慢（1-2 分钟）是常态；zjl grok-4.7 快，日常测试用它
-8. **自定义 doc（dorahub.meta）不在 `viewState().docs` 里**（那只有 pi.* builtin）：读用 `harness.documentState(token, conv.id, context)`，conversationId 必须传 Conversation handle 的 id（裸字符串会运行时报 "requires a conversation ID"）——ADR-010 踩坑记录
-9. **Tailscale SSH server 不支持 Windows**（"The Tailscale SSH server is not supported on windows"）：设计 07 的"Tailscale SSH 零配置"假设只对 Linux 成立。workpc 接入 = Windows OpenSSH Server（管理员 PowerShell：`Add-WindowsCapability -Online -Name "OpenSSH.Server~~~~0.0.1.0"; Start-Service sshd; Set-Service sshd -StartupType Automatic`）+ hub 用 DORAHUB_EXEC_WORKPC_HOST=cyq 连。pi-env 的 daemon 部署走 PowerShell + SSH，兼容原生 sshd
-10. browser-eval 里 `location.reload()` 会毁掉当前 eval 上下文（Execution context destroyed）——reload 后要单独再发一次 eval
-11. Windows 会莫名冒出 `nul` 保留名垃圾文件（重定向 bug），`git add -A` 前先 `rm -f nul`，已进 .gitignore
-
-### 执行机接入现状（2026-10-16 深夜，M4）
-
-- ✅ **workpc 已实测接通（US-06 通过）**：`hostname`→cyq、`uname -s`→MSYS_NT（Git Bash）、输出流式回传。链路 = hub 出站 SSH（原生 OpenSSH，非 Tailscale SSH）→ pi-env daemon 自动部署 → shellPath 指定 Git Bash
-- ✅ **laptop 也已接通（2026-10-17 凌晨）**：用户 shigure、机器名 sh1gure、cwd F:/group、Git 在 `D:\Software\Git`（注册表 `HKLM\SOFTWARE\GitForWindows\InstallPath` 查到）。实测 hostname/uname/ls 全通（中文文件名正常）
-- hub `/etc/dorahub/env` 完整配置：workpc = `cyq` + `shiyu` + `D:/hobby` + `D:/EESoftware/Git/usr/bin/bash.exe`；laptop = `laptop` + `shigure` + `F:/group` + `D:/Software/Git/usr/bin/bash.exe`（`_SHELL` 后缀）
-- 认证：专用 key `/etc/dorahub/id_ed25519`（dorahub 用户持有），公钥在两台 Windows 的 `C:\ProgramData\ssh\administrators_authorized_keys`（管理员组用户不读 ~/.ssh/authorized_keys——Windows OpenSSH 的 Match Group administrators 行为）
-- known_hosts：`/var/lib/dorahub/known_hosts`，hostKeyAlias `pi-env-workpc` / `pi-env-laptop`（ssh-keyscan 预扫，免首次交互）
-- **Windows 无 WSL 的坑**：System32 的 bash.exe 是 WSL 启动器；两台机器都未装 WSL → daemon 自探测命中 wsl.exe 报错。解法 = `DORAHUB_EXEC_<ID>_SHELL` 钉死 Git Bash 绝对路径
-- **PATH 注入坑（2026-10-17）**：daemon 起 bash 是非登录 shell 不读 profile → Git usr/bin 里的 coreutils（uname/sed/awk）不在 PATH（command not found）。解法 = registry 的 `shellEnvFor()` 从 shellPath 推导 usr/bin + mingw64/bin 前插 PATH（RemoteExecutionEnv shellEnv）
-- workpc/laptop 关机时会话工具报错但状态无损，开机自动重连（pi-env 懒连接）
-
-### pi CLI 会话按需搬运（2026-10-17，用户需求）
-
-用户原话：「在这台电脑的 pi 中产生的会话，我可以在另一台电脑 pi 中通过 /resume 看到」——但要按需搬运而非全量同步。
-
-**路径调研结论**：pi 的会话存储是纯本地文件（~/.pi/agent/sessions/--<编码路径>--/<ts>_<uuid>.jsonl），
-无远端源插件（--session-dir 只收本地路径）→ “pi 直连 hub”不可行（要改 pi 本体）。
-但 pi 到 pi 同构 → 纯文件搬运零转换。
-
-**实现**：
-- GET /api/pi-sessions?env=：SSH 扫执行机的 sessions 目录（printf+stat 结构化列文件，
-  grep 找最后一条 user 消息做 preview；不解析 ls -l 列数——owner/group 列数不稳）
-- POST /api/pi-sessions/transfer：readTextFile（daemon 文件通道，相对路径基于 home）→
-  改写 header cwd 为目标机路径 → writeFile 落到目标机的 --<目标cwd编码>-- 目录。
-  **不走 shell 搬文件**（Windows 命令行 32K 限制，base64 分块也炸 os error 206）
-- 前端：列表页底部「⌨ 本机 pi 会话」折叠区（按机器扫，徽章标注来源）+ 搬运向导
-  （选目标机 + 目标路径——源路径不自动映射，用户填目标机真实存在的项目路径）
-
-**端到端验证**：workpc(1.5MB 会话) → laptop F:/group 落盘成功、header cwd 改写正确；
-workpc 同机搬运后 `pi --session <id> -p` 能加载对话（/resume 同源）。
-
-**踩坑**：laptop 的实际用户目录是 `C:\Users\shigu`（不是 shigure）——daemon info.home 才是
-事实源；SSH 默认 shell 是 cmd.exe（ls/head 不可用），pi-env 的 exec 走 Git Bash 但裸 ssh 不行。
-
-### 会话漫游 MVP（2026-10-17，用户设想驱动）
-
-用户原话：「云端直接把我在上台机器运用到的所有参考文件以及模型思考、agent运行产生的所有过程文件放到新的要继续会话的机器上，并产生文件路径映射……实现真正意义上的无感切换」。
-
-- **已实现**：EnvSwitcher 变成迁移向导（选目标机器 + 目标路径 + 可选同步工作区）→
-  harvest（从会话历史挖 read/write/edit 用过的文件，排除 node_modules/.git/dist）→
-  中转搬运（旧机 RemoteExecutionEnv.readBinaryFile → hub 内存 → 新机 writeFile，
-  单文件 ≤2MB / 总量 ≤50MB）→ setEnvId + configure cwd → 返回校准 notice →
-  前端预填 composer → 用户发送 → agent 自己 read 关键文件对齐（"预置 skill"思路的落地）
-- API：POST /api/conversations/:id/transfer {targetEnvId, targetCwd} → {report, notice}
-- **端到端验证**（hub 云端）：laptop(F:/group/migrate-test) → workpc(D:/hobby/pi-durable)，
-  1 文件 23B 搬运成功内容一致；校准 notice 预填流程完整
-- 已知限制：bash 产生的文件挖不到（黑盒，notice 里已告知 agent）；大项目建议走 git；
-  bash 里的 MSYS 路径（/f/...）工具不能直接用（read 报 '\\d\\hobby...' 错误路径）——
-  agent 需用 Windows 形式路径调 read/write
-- **driveCwds 踩坑**：daemon 报 cwd=C:\Users\shiyu、driveCwds 只有 C:——SSH 会话启动的
-  daemon 没有继承 D: 盘的工作目录。相对路径经 RemoteExecutionEnv 的 #resolve 会用
-  构造时传的 cwd 拼（正确），但绝对路径直接透传 daemon fs（也正确）。真正诡异的是
-  write/read 的相对路径解析会受 daemon 进程 cwd 影响——验证时注意 agent 用相对路径写文件
-  的落点由 RemoteExecutionEnv 的 cwd 参数决定，与 bash 的 pwd 是两套体系
-
-## 7. 验收基线（改完后这些必须仍然通过）
-
-- **S1 双设备**：两个 tab 同会话，一边发消息另一边实时流式渲染，历史一致
-- **S2 steer**：长任务中 steer 开关发消息 → inbox 显示排队 → 当前轮后生效
-- **S3 确认**：发"用 bash 执行 git push origin main"（guard alwaysAsk 规则命中）→ 红边确认卡 → 拒绝后工具显示 ✗、agent 收到 block
-- **S4 重连**：kill server → 红条 → 重启后 30s 内自动回绿 + snapshot 重建
-- **S5 会话管理**（§0.5-B 新增）：新建全程无命名步骤；首条消息后标题自动生成并实时更新（无刷新）；列表按项目文件夹分组，卡片有 description/关键词
-- **渠道切换**：⚙ 切 trial:glm-5.3-flash → model-tag 更新 → 发消息由新渠道回复
-- **渠道故障**：坏 key server 上发消息 → 红色警告条显示 401
-- `node --experimental-strip-types scripts/ws-test.ts`（15 项，需 server 在 8787）
-
-## 8. 发版到云端（改完满意后）
+## 8. 发版到云端
 
 ```bash
-# workpc 上：
-git add -A && git commit -m "..." && git push origin main
-# hub 不能直连 GitHub（TLS 干扰），用打包直推：
 cd D:/hobby/pi-durable
+rm -f nul && git add -A && git -c user.name="shiyu" -c user.email="shiyu@local" commit -m "..." && git push origin main
 git archive --format=tar.gz -o dorahub-src.tar.gz HEAD
-python -c "import paramiko..." # 或者直接用 scripts/hub.py 的模式 SFTP 上传
-python scripts/hub.py "systemctl stop dorahub && rm -rf /opt/dorahub/* && tar -xzf /tmp/dorahub-src.tar.gz -C /opt/dorahub && chown -R dorahub:dorahub /opt/dorahub && cp /opt/dorahub/deploy/dorahub.service /etc/systemd/system/ && cd /opt/dorahub && sudo -u dorahub npm ci --no-audit --no-fund && sudo -u dorahub npm run build && systemctl start dorahub && sleep 4 && curl -s http://127.0.0.1:8787/api/health"
+# SFTP 上传（paramiko 模式，凭据 ~/.dorahub/hub.env）
+python -X utf8 -c "..."   # 见 git 历史或 scripts/hub.py 的连接模式
+python scripts/hub.py "systemctl stop dorahub && rm -rf /opt/dorahub/* && tar -xzf /tmp/dorahub-src.tar.gz -C /opt/dorahub && chown -R dorahub:dorahub /opt/dorahub && cp /opt/dorahub/deploy/dorahub.service /etc/systemd/system/ && cd /opt/dorahub && sudo -u dorahub npm ci --no-audit --no-fund 2>&1 | tail -1 && sudo -u dorahub npm run build 2>&1 | tail -1 && systemctl daemon-reload && systemctl start dorahub && sleep 4 && curl -s http://127.0.0.1:8787/api/health"
+rm dorahub-src.tar.gz
 ```
 
-凭据在 `C:/Users/shiyu/.dorahub/hub.env`（root 密码，不入 git）。云端地址 https://hub.tail242752.ts.net 。**手机端验证记得关 tab 重开**（SW 更新）。
+**npm run build 一步不能省**（web/dist 不入 git）。hub 不能直连 GitHub（TLS 干扰），走打包直推。
 
-## 9. 给你的自由度
+## 9. 自由度与规划建议
 
-- 设计语言全权委托给你：可以引 tailwind/组件库/动效，但**记录 ADR-010** 说明取舍（原 ADR-003 说"不引 UI 库"是简历叙事考虑，如果你认为引入更合理就推翻它，写清理由）
-- 可以加依赖，但 pi-* 生态包版本锁死不动（@earendil-works/* 全部精确版本，ADR 纪律）
-- 后端边界：**唯一允许的后端改动 = §0.5-B 的 conv-meta 小改**（自动命名生成、列表返回 cwd/新元数据字段、元数据更新事件）。除此之外想动后端先停一停；大改（协议变更）先改 design/05
-- 优化 reducer/组件结构随意，保持"事件流驱动 + snapshot 全量替换"语义
+- 设计语言全权委托（ADR-010 已立：暖纸浅色 + token 体系 + 不引 UI 库）；用户审美否决项：不要程序员黑、不要边框方盒堆叠
+- 后端可小改（conv-meta/新端点级别）；协议大改先改 design/05
+- pi-* 生态包版本锁死（@earendil-works/* 精确版本）
+- **UI 臃肿度已到临界**（用户点名）：动手前先想信息架构——建议方向：设置页收纳管理功能、会话页 header 收敛、宽屏两栏让列表常驻。做之前给用户看方案再实施
+- 用户偏好：先分析需求再动手、量化验证（不是"我觉得好了"）、诚实报告边界与限制
 
-## pi 会话管理中心（2026-10-17 深夜，Claude Code Desktop 式管理）
+## 附：待用户手动的三件事（历史遗留）
 
-用户需求：pi 会话区不只搬运——要能打开（对话交互）、删除、fork，对标 Claude Code Desktop。
-
-**已实现**（全部云端实测）：
-- **导入对话**：jsonl v3 → durable entries（user/assistant/toolResult 同构映射，
-  appendEntry 逐个 await——pi-durable 事务要求 Tx 操作在 commit 回调内落定）；
-  model_change 继承为会话模型；去重键 ConvMetaDoc.sourcePiKey（v4 迁移）。
-  导入后即普通 DoraHub 会话：可对话（上下文完整，实测 agent 记得原任务）、
-  可 fork、可跨机迁移、自动命名。
-- **删除**：rm 源机 .jsonl（pi 官方删除语义）+ 列表缓存失效
-- **搬运**：原有跨机 relay 不变
-- 卡片三操作：⤵ 导入对话（成功即跳转）/ ✕ 删除（confirm + danger 样式）/ → 搬运
-
-**存储治理**（同批）：
-- pi-session-meta.json：原子写（tmp+rename）、90 天过期清理、500 条上限
-- audit.jsonl：5MB 轮转（.1 备份一份）
-
-**架构注意**：pi 导入是单向快照（导入后 pi 里的新对话不会同步进来——它们是两个世界，
-导入 = 把 pi 会话"收编"进 durable 体系）。fork 请在 DoraHub 侧做（pi 文件 fork 有树结构风险）。
-
-**UI 结构现状**（臃肿度已到需要规划的临界点，下个会话参考）：
-列表页 = DoraHub 会话分组 + ⌨ pi 会话折叠区；会话页 = env 标签 + 模型标签 + ⚙/⏹/⑂。
-建议下个会话考虑：设置页（执行机管理/渠道管理收敛进去）、会话页 header 菜单合并、
-宽屏两栏（列表常驻左栏——design/06 原计划）。
+1. ~~手机装 Tailscale~~ → 改为：手机装 NovaScale（中国区可搜到，内置 libtailscale）测试；或外区账号装官方版
+2. 管理台把 cyq 改名 workpc（改后 hub 的 DORAHUB_EXEC_WORKPC_HOST 也要同步改，known_hosts 的 pi-env-workpc 别名不用动）
+3. （可选）workpc 管理员 PowerShell 加 dev key 公钥，让本地 dev 也能 SSH 执行机（§1）
