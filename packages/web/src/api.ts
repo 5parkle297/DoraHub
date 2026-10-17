@@ -59,6 +59,18 @@ export const api = {
       cwd: string; mtime: number; preview: string; size: number;
     }[]>(`/api/pi-sessions?env=${encodeURIComponent(env)}`),
 
+  piSessionImport: (req: { sourceEnvId: string; dir: string; file: string }) =>
+    call<{ ok: true; convId: string; existing: boolean; imported: number }>("/api/pi-sessions/import", {
+      method: "POST",
+      body: JSON.stringify(req),
+    }),
+
+  piSessionDelete: (req: { envId: string; dir: string; file: string }) =>
+    call<{ ok: true }>("/api/pi-sessions/delete", {
+      method: "POST",
+      body: JSON.stringify(req),
+    }),
+
   piSessionTransfer: (req: { sourceEnvId: string; file: string; dir: string; targetEnvId: string; targetCwd: string }) =>
     call<{ ok: true; targetFile: string; bytes: number }>("/api/pi-sessions/transfer", {
       method: "POST",

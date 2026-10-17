@@ -586,3 +586,8 @@ body {
 @media (min-width: 769px) {
   .app-row { display: flex; }
 }
+
+/* pi 会话操作组 */
+.pi-actions { margin-left: auto; display: flex; gap: 4px; }
+.pi-move.danger:hover { color: var(--red); border-color: var(--red); background: var(--red-soft); }
+.pi-move:disabled { opacity: 0.5; cursor: default; }

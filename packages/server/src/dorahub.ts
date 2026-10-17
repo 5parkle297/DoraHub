@@ -47,6 +47,8 @@ interface ConvRecord {
   /** agent 配置快照（列表页 model/cwd） */
   model: string | null;
   cwd: string | null;
+  /** 来源 pi 会话 key（导入去重；null = 原生） */
+  sourcePiKey: string | null;
 }
 
 /** 确认等待者 */
@@ -59,6 +61,17 @@ interface ConfirmWaiter {
 export class Dorahub {
   private convs = new Map<string, ConvRecord>();
   private confirmWaiters = new Map<string, ConfirmWaiter>();
+
+  /** pi 会话来源索引（sourcePiKey -> convId，导入去重） */
+  piSourceIndex = new Map<string, string>();
+
+  findByPiSource(key: string): string | null {
+    for (const [id, rec] of this.convs) {
+      if (rec.sourcePiKey === key) return id;
+    }
+    return null;
+  }
+
   /** harness root 会话 id（列表隐藏用） */
   private rootId = "";
 
@@ -136,6 +149,7 @@ export class Dorahub {
     const meta: ConvRecord["meta"] = { description: null, keywords: [], autoNamed: false, namedAtUserCount: 0, envId: null, hidden: false };
     let model: string | null = null;
     let cwd: string | null = null;
+    let sourcePiKey: string | null = null;
     try {
       // 自定义 doc 不在 viewState.docs（只有 pi.* builtin）——用 documentState 读（0.5-B 踩坑）
       const st = await this.harness.documentState(ConvMetaDoc, conv.id, context);
@@ -148,6 +162,7 @@ export class Dorahub {
         meta.namedAtUserCount = typeof m.namedAtUserCount === "number" ? m.namedAtUserCount : 0;
         meta.envId = m.envId ?? null;
         meta.hidden = m.hidden === true;
+        sourcePiKey = typeof m.sourcePiKey === "string" ? m.sourcePiKey : null;
       }
       // agent 配置（pi.agent doc）
       const view = await conv.viewState(context);
@@ -181,6 +196,7 @@ export class Dorahub {
       meta,
       model,
       cwd,
+      sourcePiKey,
     });
   }
 
@@ -307,6 +323,23 @@ export class Dorahub {
     const src = this.convs.get(id);
     await this.track(forked, src ? `${src.name} (fork)` : "fork");
     return forked;
+  }
+
+  /** 导入 pi 会话为 durable 会话（去重后转发给 pi-import）。 */
+  async importPiSession(execRegistry: import("./exec/registry.ts").ExecRegistry, sourceEnvId: string, dir: string, file: string) {
+    const { importPiSession } = await import("./pi-import.ts");
+    const key = `pi:${sourceEnvId}/${file}`;
+    const existing = this.findByPiSource(key);
+    if (existing) {
+      return { ok: true, convId: existing, existing: true } as import("./pi-import.ts").PiImportResult;
+    }
+    const result = await importPiSession(this.harness, execRegistry, sourceEnvId, dir, file);
+    if (result.ok && result.convId) {
+      this.piSourceIndex.set(key, result.convId);
+      const conv = await this.harness.conversation(result.convId as any, context);
+      if (conv) await this.track(conv, "");
+    }
+    return result;
   }
 
   /** 软删除会话（列表隐藏，数据保留——durable 哲学，fork 历史不断）。 */

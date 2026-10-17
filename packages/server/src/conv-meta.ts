@@ -29,11 +29,15 @@ export interface ConvMetaState extends JsonObject {
   namedAtUserCount: number;
   /** 软删除（列表隐藏；数据保留——durable 哲学 + fork 历史不断） */
   hidden: boolean;
+  /** 来源 pi 会话标记（"pi:envId/file"，导入去重用；null = 原生 DoraHub 会话） */
+  sourcePiKey: string | null;
+  /** 来源机器（导入时的 envId，展示用） */
+  sourcePiEnvId: string | null;
 }
 
 export const ConvMetaDoc: RewindableConversationDocToken<ConvMetaState> = defineDoc({
   kind: "dorahub.meta",
-  version: 3,
+  version: 4,
   scope: "conversation",
   history: "rewindable",
   fork: "asOf",
@@ -46,6 +50,8 @@ export const ConvMetaDoc: RewindableConversationDocToken<ConvMetaState> = define
     autoNamed: false,
     namedAtUserCount: 0,
     hidden: false,
+    sourcePiKey: null,
+    sourcePiEnvId: null,
   }),
   migrate(value, fromVersion) {
     if (fromVersion < 2) {
@@ -59,7 +65,10 @@ export const ConvMetaDoc: RewindableConversationDocToken<ConvMetaState> = define
       };
     }
     if (fromVersion < 3) {
-      return { ...(value as any), hidden: false };
+      return { ...(value as any), hidden: false, sourcePiKey: null, sourcePiEnvId: null };
+    }
+    if (fromVersion < 4) {
+      return { ...(value as any), sourcePiKey: null, sourcePiEnvId: null };
     }
     return value as ConvMetaState;
   },

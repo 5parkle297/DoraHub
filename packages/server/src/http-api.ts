@@ -212,6 +212,35 @@ export function createRouter(deps: HttpApiDeps) {
       }
     }
 
+    if (path === "/api/pi-sessions/import" && method === "POST") {
+      const body = JSON.parse((await readBody(req)).toString("utf8"));
+      const { sourceEnvId, dir, file } = body;
+      if (!sourceEnvId || !dir || !file) return err(res, 400, "bad_request", "sourceEnvId/dir/file required");
+      try {
+        const r = await app.importPiSession(deps.execRegistry!, sourceEnvId, dir, file);
+        audit.log("pi_session_import", { from: sourceEnvId, file, ok: r.ok, existing: r.existing ?? false });
+        if (!r.ok) return err(res, 500, "pi_import_failed", r.error ?? "unknown");
+        return json(res, 200, r);
+      } catch (e: any) {
+        return err(res, 500, "pi_import_failed", String(e?.message ?? e));
+      }
+    }
+
+    if (path === "/api/pi-sessions/delete" && method === "POST") {
+      const body = JSON.parse((await readBody(req)).toString("utf8"));
+      const { envId, dir, file } = body;
+      if (!envId || !dir || !file) return err(res, 400, "bad_request", "envId/dir/file required");
+      try {
+        const { deletePiSession } = await import("./pi-sessions.ts");
+        const r = await deletePiSession(deps.execRegistry!, envId, dir, file);
+        audit.log("pi_session_delete", { env: envId, file, ok: r.ok });
+        if (!r.ok) return err(res, 500, "pi_delete_failed", r.error ?? "unknown");
+        return json(res, 200, r);
+      } catch (e: any) {
+        return err(res, 500, "pi_delete_failed", String(e?.message ?? e));
+      }
+    }
+
     if (path === "/api/pi-sessions/transfer" && method === "POST") {
       const body = JSON.parse((await readBody(req)).toString("utf8"));
       const { sourceEnvId, file, dir, targetEnvId, targetCwd } = body;

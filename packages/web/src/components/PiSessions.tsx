@@ -7,6 +7,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../api.ts";
 import { relTime } from "../util/time.ts";
+import { navigate } from "../route.ts";
 import { Modal } from "./Modal.tsx";
 import type { ExecutorInfo } from "@dorahub/shared";
 
@@ -31,6 +32,42 @@ export function PiSessionsSection({ executors }: { executors: ExecutorInfo[] }) 
   const [open, setOpen] = useState(false);
   const [error, setError] = useState("");
   const [moving, setMoving] = useState<PiSession | null>(null);
+
+  // 导入 / 删除状态
+  const [importing, setImporting] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
+  /** 已导入的 pi 会话：sessionId -> durable convId */
+  const [importedIds, setImportedIds] = useState<Map<string, string>>(new Map());
+
+  async function doImport(sess: PiSession) {
+    setImporting(sess.file);
+    setError("");
+    try {
+      const r = await api.piSessionImport({ sourceEnvId: sess.envId, dir: sess.dir, file: sess.file });
+      setImportedIds((m) => new Map(m).set(sess.sessionId, r.convId));
+      if (!r.existing) {
+        navigate({ page: "conversation", id: r.convId });
+      }
+    } catch (e: any) {
+      setError("导入失败：" + e.message);
+    } finally {
+      setImporting(null);
+    }
+  }
+
+  async function doDelete(sess: PiSession) {
+    if (!confirm("删除 " + (sess.title || sess.preview || sess.file.slice(0, 30)) + "？此操作不可恢复（删除源机上的 .jsonl 文件）。")) return;
+    setDeleting(sess.file);
+    setError("");
+    try {
+      await api.piSessionDelete({ envId: sess.envId, dir: sess.dir, file: sess.file });
+      await load();
+    } catch (e: any) {
+      setError("删除失败：" + e.message);
+    } finally {
+      setDeleting(null);
+    }
+  }
 
   async function load() {
     setLoading(true);
@@ -101,7 +138,19 @@ export function PiSessionsSection({ executors }: { executors: ExecutorInfo[] }) 
               )}
               <div className="pi-meta">
                 {s.cwd} · {(s.size / 1024).toFixed(0)}KB
-                <button className="pi-move" onClick={() => setMoving(s)}>→ 搬到另一台</button>
+                <span className="pi-actions">
+                  {importedIds.has(s.sessionId) ? (
+                    <button className="pi-move" onClick={() => navigate({ page: "conversation", id: importedIds.get(s.sessionId)! })}>▶ 打开</button>
+                  ) : (
+                    <button className="pi-move" disabled={importing === s.file} onClick={() => doImport(s)}>
+                      {importing === s.file ? "导入中…" : "⤵ 导入对话"}
+                    </button>
+                  )}
+                  <button className="pi-move danger" disabled={deleting === s.file} onClick={() => doDelete(s)}>
+                    {deleting === s.file ? "删除中" : "✕ 删除"}
+                  </button>
+                  <button className="pi-move" onClick={() => setMoving(s)}>→ 搬运</button>
+                </span>
               </div>
             </div>
           ))}
