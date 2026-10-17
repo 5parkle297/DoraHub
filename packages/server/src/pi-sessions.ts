@@ -136,14 +136,14 @@ export async function transferPiSession(
   const target = await execRegistry.buildForEnv(targetEnvId, null);
   if (!source || !target) return { ok: false, targetFile: "", bytes: 0, error: "executor not available" };
 
-  // 1. 源机读全文
-  const b64 = (await sh(source, `cat ~/.pi/agent/sessions/${dir}/${file} | base64 -w 0`)).trim();
-  const content = Buffer.from(b64, "base64");
-  if (content.length === 0) return { ok: false, targetFile: "", bytes: 0, error: "empty file" };
-  if (content.length > 20 * 1024 * 1024) return { ok: false, targetFile: "", bytes: 0, error: "session too large (>20MB)" };
+  // 1. 源机读全文（readTextFile：daemon 文件通道，相对路径基于 home）
+  const rr = await source.readTextFile(`.pi/agent/sessions/${dir}/${file}`);
+  if (!rr.ok) return { ok: false, targetFile: "", bytes: 0, error: `read failed: ${rr.error.message}` };
+  let text = rr.value;
+  if (!text.trim()) return { ok: false, targetFile: "", bytes: 0, error: "empty file" };
+  if (text.length > 20 * 1024 * 1024) return { ok: false, targetFile: "", bytes: 0, error: "session too large (>20MB)" };
 
   // 2. 改写 session header 的 cwd 为目标机路径（/resume 列表的归属目录）
-  let text = content.toString("utf8");
   const lines = text.split("\n");
   for (let i = 0; i < lines.length; i++) {
     try {
@@ -157,17 +157,11 @@ export async function transferPiSession(
   }
   text = lines.join("\n");
 
-  // 3. 目标目录（按目标 cwd 编码）+ 写入（base64 中转，绕开引号地狱）
+  // 3. 目标目录 + 写入：走 daemon 的 writeFile API（不经 shell——Windows 命令行
+  //    32K 限制；文件通道无此限制）。相对路径基于 env cwd = home（buildForEnv(null)）
   const targetDir = encodeDir(targetCwd);
   await sh(target, `mkdir -p ~/.pi/agent/sessions/${targetDir}`);
-  const writeB64 = Buffer.from(text, "utf8").toString("base64");
-  // 分块写（命令行长度限制 ~128KB，保守 64KB/块）
-  const CHUNK = 65536;
-  const chunks = Math.ceil(writeB64.length / CHUNK);
-  for (let i = 0; i < chunks; i++) {
-    const part = writeB64.slice(i * CHUNK, (i + 1) * CHUNK);
-    const op = i === 0 ? `echo -n ${part} | base64 -d > ~/.pi/agent/sessions/${targetDir}/${file}` : `echo -n ${part} | base64 -d >> ~/.pi/agent/sessions/${targetDir}/${file}`;
-    await sh(target, op);
-  }
+  const w = await target.writeFile(`.pi/agent/sessions/${targetDir}/${file}`, text, BACKGROUND_CONTEXT);
+  if (!w.ok) return { ok: false, targetFile: "", bytes: 0, error: `write failed: ${w.error.message}` };
   return { ok: true, targetFile: `~/.pi/agent/sessions/${targetDir}/${file}`, bytes: text.length };
 }
