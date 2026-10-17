@@ -283,3 +283,29 @@ python scripts/hub.py "systemctl stop dorahub && rm -rf /opt/dorahub/* && tar -x
 - 可以加依赖，但 pi-* 生态包版本锁死不动（@earendil-works/* 全部精确版本，ADR 纪律）
 - 后端边界：**唯一允许的后端改动 = §0.5-B 的 conv-meta 小改**（自动命名生成、列表返回 cwd/新元数据字段、元数据更新事件）。除此之外想动后端先停一停；大改（协议变更）先改 design/05
 - 优化 reducer/组件结构随意，保持"事件流驱动 + snapshot 全量替换"语义
+
+## pi 会话管理中心（2026-10-17 深夜，Claude Code Desktop 式管理）
+
+用户需求：pi 会话区不只搬运——要能打开（对话交互）、删除、fork，对标 Claude Code Desktop。
+
+**已实现**（全部云端实测）：
+- **导入对话**：jsonl v3 → durable entries（user/assistant/toolResult 同构映射，
+  appendEntry 逐个 await——pi-durable 事务要求 Tx 操作在 commit 回调内落定）；
+  model_change 继承为会话模型；去重键 ConvMetaDoc.sourcePiKey（v4 迁移）。
+  导入后即普通 DoraHub 会话：可对话（上下文完整，实测 agent 记得原任务）、
+  可 fork、可跨机迁移、自动命名。
+- **删除**：rm 源机 .jsonl（pi 官方删除语义）+ 列表缓存失效
+- **搬运**：原有跨机 relay 不变
+- 卡片三操作：⤵ 导入对话（成功即跳转）/ ✕ 删除（confirm + danger 样式）/ → 搬运
+
+**存储治理**（同批）：
+- pi-session-meta.json：原子写（tmp+rename）、90 天过期清理、500 条上限
+- audit.jsonl：5MB 轮转（.1 备份一份）
+
+**架构注意**：pi 导入是单向快照（导入后 pi 里的新对话不会同步进来——它们是两个世界，
+导入 = 把 pi 会话"收编"进 durable 体系）。fork 请在 DoraHub 侧做（pi 文件 fork 有树结构风险）。
+
+**UI 结构现状**（臃肿度已到需要规划的临界点，下个会话参考）：
+列表页 = DoraHub 会话分组 + ⌨ pi 会话折叠区；会话页 = env 标签 + 模型标签 + ⚙/⏹/⑂。
+建议下个会话考虑：设置页（执行机管理/渠道管理收敛进去）、会话页 header 菜单合并、
+宽屏两栏（列表常驻左栏——design/06 原计划）。
