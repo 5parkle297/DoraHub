@@ -19,6 +19,10 @@ interface PiSession {
   mtime: number;
   preview: string;
   size: number;
+  title: string | null;
+  description: string | null;
+  keywords: string[];
+  metaReady: boolean;
 }
 
 export function PiSessionsSection({ executors }: { executors: ExecutorInfo[] }) {
@@ -32,7 +36,6 @@ export function PiSessionsSection({ executors }: { executors: ExecutorInfo[] }) 
     setLoading(true);
     setError("");
     try {
-      // 扫所有非 hub 执行机（hub 自己的 pi 会话没意义——它是服务不是工作站）
       const results = await Promise.all(
         executors.filter((e) => e.envId !== "hub").map((e) => api.piSessions(e.envId).catch(() => [])),
       );
@@ -47,6 +50,17 @@ export function PiSessionsSection({ executors }: { executors: ExecutorInfo[] }) 
   useEffect(() => {
     if (open) load();
   }, [open]);
+
+  // 有未就绪的 meta（首次扫描后台生成中）→ 8s 轮询拉新，直到全部就绪
+  useEffect(() => {
+    if (!open || loading) return;
+    const pendingMeta = sessions.some((s) => !s.metaReady);
+    if (!pendingMeta) return;
+    const t = setInterval(() => {
+      if (!document.hidden) load();
+    }, 8000);
+    return () => clearInterval(t);
+  }, [open, loading, sessions]);
 
   return (
     <div className="pi-sessions">
@@ -66,9 +80,25 @@ export function PiSessionsSection({ executors }: { executors: ExecutorInfo[] }) 
             <div key={`${s.envId}/${s.file}`} className="pi-item">
               <div className="pi-item-top">
                 <span className="pi-env">{s.envId}</span>
-                <span className="pi-preview">{s.preview || s.sessionId.slice(0, 8)}</span>
+                <span className={`pi-title ${s.metaReady ? "" : "pi-pending"}`}>
+                  {s.title ?? s.preview?.slice(0, 40) ?? s.sessionId.slice(0, 8)}
+                </span>
                 <span className="pi-time">{relTime(s.mtime)}</span>
               </div>
+              {s.metaReady ? (
+                <>
+                  {s.description && <div className="pi-desc">{s.description}</div>}
+                  {s.keywords.length > 0 && (
+                    <div className="conv-keywords">
+                      {s.keywords.map((k, i) => (
+                        <span key={i} className="kw-chip">{k}</span>
+                      ))}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="pi-desc pi-pending">摘要生成中…（首次扫描后自动补全，稍后自动刷新）</div>
+              )}
               <div className="pi-meta">
                 {s.cwd} · {(s.size / 1024).toFixed(0)}KB
                 <button className="pi-move" onClick={() => setMoving(s)}>→ 搬到另一台</button>

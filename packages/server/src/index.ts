@@ -149,7 +149,7 @@ async function main() {
     const isApi = url.pathname.startsWith("/api/") || url.pathname === "/ws";
 
     const handle = isApi || !serveStatic
-      ? createRouter({ app, audit, version: VERSION, startedAt: Date.now(), token, execRegistry, channels })(req, res)
+      ? createRouter({ app, audit, version: VERSION, startedAt: Date.now(), token, execRegistry, channels, models })(req, res)
       : (async () => {
           let filePath = join(webDist, url.pathname === "/" ? "index.html" : url.pathname.slice(1));
           if (!filePath.startsWith(webDist)) { res.writeHead(403).end(); return; }

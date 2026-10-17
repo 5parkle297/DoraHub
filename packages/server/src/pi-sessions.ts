@@ -7,16 +7,17 @@
  * - 存储是纯本地文件，无远端源插件（--session-dir 只收本地路径）
  * - pi 到 pi 同构 → 无需格式转换，纯文件搬运
  *
- * 流程：
- * - listPiSessions(envId)：SSH 扫描目标机的 sessions 目录，读每个 jsonl 的
- *   头部（session/model_change/首条 user message）做摘要
- * - transferPiSession：源机拉完整 jsonl → hub 内存 → 目标机写入对应
- *   sessions/--<目标cwd编码>--/<原文件名>（目标机 cwd 不同则重编码目录，
- *   并改写 session header 的 cwd 字段）
+ * 摘要体系（与 DoraHub 会话同规格，用户要求 2026-10-17）：
+ * - 每个会话生成 title / description / keywords（便宜渠道一次性调用）
+ * - 缓存在 hub 的 /var/lib/dorahub/pi-session-meta.json（key = envId/file），
+ *   mtime 变了才重新生成——首次展开列表时后台补全，前端轮询刷新
  */
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
+import { dirname } from "node:path";
 import type { ExecRegistry } from "./exec/registry.ts";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import type { ExecutionEnv } from "@earendil-works/pi-durable/env";
+import type { Models } from "@earendil-works/pi-ai";
 
 /** exec 并收集 stdout（ShellExecResult 不带 output，要 onOutput 回调收）。 */
 async function sh(env: ExecutionEnv, command: string): Promise<string> {
@@ -39,49 +40,175 @@ export interface PiSessionInfo {
   cwd: string;
   /** 修改时间（epoch ms） */
   mtime: number;
-  /** 首条用户消息预览 */
+  /** 最后一条用户消息（缓存未生成时的回退显示） */
   preview: string;
   /** 文件大小 */
   size: number;
+  /** ==== 生成的元数据（缓存命中才有；null = 生成中/失败） ==== */
+  title: string | null;
+  description: string | null;
+  keywords: string[];
+  /** meta 是否已就绪（前端据此显示骨架/刷新） */
+  metaReady: boolean;
 }
 
-/** 列出一台机器上的 pi 会话（读每个文件头 2KB 做摘要）。 */
-export async function listPiSessions(execRegistry: ExecRegistry, envId: string): Promise<PiSessionInfo[]> {
-  // cwd 用 /tmp（RemoteExecutionEnv 需要存在的目录；所有命令都用绝对/~ 路径，与 cwd 无关）
+/** 缓存条目。 */
+interface MetaCacheEntry {
+  title: string;
+  description: string;
+  keywords: string[];
+  mtime: number;
+  generatedAt: number;
+}
+
+const META_PATH = process.env.DORAHUB_PI_META ?? "/var/lib/dorahub/pi-session-meta.json";
+
+function loadMetaCache(): Record<string, MetaCacheEntry> {
+  try {
+    return JSON.parse(readFileSync(META_PATH, "utf8"));
+  } catch {
+    return {};
+  }
+}
+
+function saveMetaCache(cache: Record<string, MetaCacheEntry>) {
+  try {
+    mkdirSync(dirname(META_PATH), { recursive: true });
+    writeFileSync(META_PATH, JSON.stringify(cache, null, 1));
+  } catch { /* 写失败不致命 */ }
+}
+
+/** 生成中/最近失败的标记（避免重复触发） */
+const pending = new Set<string>();
+const failedRecently = new Map<string, number>();
+
+/** 列出一台机器上的 pi 会话。收集用户消息供 meta 生成。 */
+export async function listPiSessions(execRegistry: ExecRegistry, envId: string, models?: Models): Promise<PiSessionInfo[]> {
   const env = await execRegistry.buildForEnv(envId, null);
   if (!env) return [];
-  const ctx = BACKGROUND_CONTEXT;
-  // 列 sessions 目录；Windows 上 daemon 跑 Git Bash 兼容 ls
+  const cache = loadMetaCache();
+  const out: PiSessionInfo[] = [];
+  const toGenerate: { key: string; info: PiSessionInfo; userMessages: string[] }[] = [];
+
   const listHome = await sh(env, 'ls -1 ~/.pi/agent/sessions/ 2>/dev/null || true');
   const dirs = listHome.trim().split("\n").filter((d) => d.startsWith("--") && d.endsWith("--"));
-  const out: PiSessionInfo[] = [];
+
   for (const dir of dirs.slice(0, 30)) {
-    // 每个目录里的 jsonl 文件 + mtime + size——用 printf 结构化输出，不解析 ls 列
-    // （ls -l 的 owner/group 列数不稳，文件名还可能含空格）
-    const ls = await sh(env, `cd ~/.pi/agent/sessions/${dir} && for f in *.jsonl; do [ -f \"\$f\" ] && printf '%s\\t%s\\t%s\\n' \"\$f\" \"\$(stat -c %Y \"\$f\")\" \"\$(stat -c %s \"\$f\")\"; done | head -20`);
+    const ls = await sh(env, `cd ~/.pi/agent/sessions/${dir} && for f in *.jsonl; do [ -f "$f" ] && printf '%s\\t%s\\t%s\\n' "$f" "$(stat -c %Y "$f")" "$(stat -c %s "$f")"; done | head -20`);
     if (!ls.trim()) continue;
     for (const line of ls.trim().split("\n").filter(Boolean)) {
       const [file, mtime, size] = line.split("\t");
       if (!file?.endsWith(".jsonl")) continue;
-      // 读头部摘要（session header + 首条 user 消息）
-      // 头 4KB 拿 session header；preview 用 grep 扫全文件取最后一条 user 消息行
       const head = await sh(env, `head -c 4096 ~/.pi/agent/sessions/${dir}/${file}`);
-      const userLine = await sh(env, `grep '"role":"user"' ~/.pi/agent/sessions/${dir}/${file} | tail -1 | head -c 3000`);
-      const preview = summarizeHead(userLine || head);
       const hdr = parseSessionHeader(head);
-      out.push({
+      const lastUser = extractUserText(
+        await sh(env, `grep '"role":"user"' ~/.pi/agent/sessions/${dir}/${file} | tail -1 | head -c 3000`),
+      );
+      const key = `${envId}/${file}`;
+      const cached = cache[key];
+      const mtimeMs = Number(mtime) * 1000;
+      const info: PiSessionInfo = {
         envId,
         dir,
         file,
         sessionId: hdr?.id ?? file.replace(/\.jsonl$/, "").split("_").pop() ?? file,
         cwd: hdr?.cwd ?? decodeDir(dir),
-        mtime: Number(mtime) * 1000,
-        preview,
+        mtime: mtimeMs,
+        preview: lastUser,
         size: Number(size),
-      });
+        title: cached && cached.mtime === mtimeMs ? cached.title : null,
+        description: cached && cached.mtime === mtimeMs ? cached.description : null,
+        keywords: cached && cached.mtime === mtimeMs ? cached.keywords : [],
+        metaReady: !!(cached && cached.mtime === mtimeMs),
+      };
+      out.push(info);
+
+      // 缓存缺失/过期 → 收集用户消息待生成
+      const recentlyFailed = (failedRecently.get(key) ?? 0) > Date.now() - 10 * 60_000;
+      if (!info.metaReady && !pending.has(key) && !recentlyFailed && models) {
+        // 收集全部用户消息（截断总量 16KB，够模型概括了）
+        const allUsers = await sh(env, `grep '"role":"user"' ~/.pi/agent/sessions/${dir}/${file} | head -40 | cut -c1-400`);
+        const userMessages = allUsers.split("\n").map(extractUserText).filter(Boolean).slice(0, 40);
+        if (userMessages.length > 0) {
+          toGenerate.push({ key, info, userMessages });
+        }
+      }
     }
   }
+
+  // 后台生成缺失的 meta（不阻塞列表返回；前端下次拉取见结果）
+  if (toGenerate.length > 0 && models) {
+    generateInBackground(toGenerate, models);
+  }
+
   return out.sort((a, b) => b.mtime - a.mtime).slice(0, 40);
+}
+
+/** 后台串行生成（免费渠道慢，一次别打太多）。 */
+function generateInBackground(items: { key: string; info: PiSessionInfo; userMessages: string[] }[], models: Models) {
+  void (async () => {
+    for (const item of items.slice(0, 12)) {
+      pending.add(item.key);
+      try {
+        const result = await callSummaryModel(models, item.userMessages);
+        if (result) {
+          const cache = loadMetaCache();
+          cache[item.key] = {
+            title: result.title,
+            description: result.description,
+            keywords: result.keywords,
+            mtime: item.info.mtime,
+            generatedAt: Date.now(),
+          };
+          saveMetaCache(cache);
+        } else {
+          failedRecently.set(item.key, Date.now());
+        }
+      } catch {
+        failedRecently.set(item.key, Date.now());
+      } finally {
+        pending.delete(item.key);
+      }
+    }
+  })();
+}
+
+/** 一次性摘要调用（渠道回退，同 AutoNamer 策略）。 */
+async function callSummaryModel(models: Models, userMessages: string[]): Promise<{ title: string; description: string; keywords: string[] } | null> {
+  const transcript = userMessages
+    .slice(-12)
+    .map((t, i) => `${i + 1}. ${t.length > 300 ? t.slice(0, 300) + "…" : t}`)
+    .join("\n");
+  const systemPrompt =
+    "你是会话命名助手。根据用户对 AI 编程助手提出的请求，生成会话元数据。" +
+    "title 用用户的语言，不超过 12 个字，名词短语，概括任务本身，不要标点结尾。" +
+    "description 一句话（不超过 40 字）概括用户在做什么、想达成什么。" +
+    "keywords 3-5 个关键词，每个不超过 6 个字。" +
+    '只输出一个 JSON 对象：{"title":"...","description":"...","keywords":["..."]}，不要任何其他内容。';
+  for (const ref of ["trial:glm-5.3-flash", "zjl:glm-5.3-flash", "zjl:grok-4.7"]) {
+    const [provider, modelId] = ref.split(":");
+    const model = models.getModel(provider, modelId);
+    if (!model) continue;
+    try {
+      const msg = await models.completeSimple(model, {
+        systemPrompt,
+        messages: [{ role: "user", content: `用户的请求记录（按时间顺序）：\n${transcript}`, timestamp: Date.now() }],
+      });
+      if (msg.stopReason === "error") continue;
+      const text = msg.content.filter((b: any) => b.type === "text").map((b: any) => b.text ?? "").join("");
+      const m = text.match(/\{[\s\S]*\}/);
+      if (!m) continue;
+      const o = JSON.parse(m[0]);
+      const title = typeof o.title === "string" ? o.title.trim().slice(0, 24) : "";
+      if (!title) continue;
+      return {
+        title,
+        description: typeof o.description === "string" ? o.description.trim().slice(0, 60) : "",
+        keywords: Array.isArray(o.keywords) ? o.keywords.filter((k: any) => typeof k === "string" && k.trim()).map((k: string) => k.trim().slice(0, 12)).slice(0, 5) : [],
+      };
+    } catch { /* 下一个渠道 */ }
+  }
+  return null;
 }
 
 function parseSessionHeader(head: string): { id: string; cwd: string } | null {
@@ -94,21 +221,19 @@ function parseSessionHeader(head: string): { id: string; cwd: string } | null {
   return null;
 }
 
-function summarizeHead(head: string): string {
-  for (const line of head.split("\n")) {
-    try {
-      const o = JSON.parse(line);
-      if (o.type === "message" && o.message?.role === "user") {
-        const c = o.message.content;
-        const text = typeof c === "string" ? c
-          : Array.isArray(c) ? c.filter((b: any) => b?.type === "text").map((b: any) => b.text ?? "").join(" ")
-          : "";
-        const t = text.trim();
-        // 跳过 pi 注入的包装消息（system wrapper / hook）
-        if (t && !t.startsWith("<")) return t.slice(0, 100);
-      }
-    } catch { continue; }
-  }
+/** 从单条 jsonl 行提取 user 消息文本（跳过 pi 注入的 <> 包装）。 */
+function extractUserText(line: string): string {
+  try {
+    const o = JSON.parse(line);
+    if (o.type === "message" && o.message?.role === "user") {
+      const c = o.message.content;
+      const text = typeof c === "string" ? c
+        : Array.isArray(c) ? c.filter((b: any) => b?.type === "text").map((b: any) => b.text ?? "").join(" ")
+        : "";
+      const t = text.trim();
+      if (t && !t.startsWith("<")) return t.slice(0, 200);
+    }
+  } catch { /* 非 JSON 行 */ }
   return "";
 }
 
@@ -163,5 +288,6 @@ export async function transferPiSession(
   await sh(target, `mkdir -p ~/.pi/agent/sessions/${targetDir}`);
   const w = await target.writeFile(`.pi/agent/sessions/${targetDir}/${file}`, text, BACKGROUND_CONTEXT);
   if (!w.ok) return { ok: false, targetFile: "", bytes: 0, error: `write failed: ${w.error.message}` };
+  void ctx;
   return { ok: true, targetFile: `~/.pi/agent/sessions/${targetDir}/${file}`, bytes: text.length };
 }

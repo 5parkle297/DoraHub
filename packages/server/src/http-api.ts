@@ -19,6 +19,8 @@ export interface HttpApiDeps {
   execRegistry?: ExecRegistry;
   /** 渠道目录（/api/models） */
   channels?: ChannelConfig[];
+  /** models 实例（pi 会话摘要生成用） */
+  models?: import("@earendil-works/pi-ai").Models;
 }
 
 const MAX_BODY = 1 << 20; // 1 MiB
@@ -203,7 +205,7 @@ export function createRouter(deps: HttpApiDeps) {
       try {
         const { listPiSessions } = await import("./pi-sessions.ts");
         // hub 自身的 pi 会话也扫（本机目录）
-        const sessions = await listPiSessions(deps.execRegistry, envId);
+        const sessions = await listPiSessions(deps.execRegistry, envId, deps.models);
         return json(res, 200, sessions);
       } catch (e: any) {
         return err(res, 500, "pi_session_list_failed", String(e?.message ?? e));
