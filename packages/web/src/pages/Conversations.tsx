@@ -28,6 +28,11 @@ export function ConversationsPage() {
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
 
+  /** 拉执行机状态（打开新建弹窗前必调；服务端 30s 节流，不会打爆） */
+  function refreshExecutors() {
+    api.executors().then(setExecutors).catch(() => {});
+  }
+
   async function refresh() {
     try {
       setConvs(await api.listConversations());
@@ -39,7 +44,7 @@ export function ConversationsPage() {
 
   useEffect(() => {
     refresh();
-    api.executors().then(setExecutors).catch(() => {});
+    refreshExecutors();
     const unsub = wsClient.subscribe({
       onFrame: (f) => {
         if (f.t === "conv_status") {
@@ -102,7 +107,15 @@ export function ConversationsPage() {
         <h1>
           Dora<span className="brand-dot">Hub</span>
         </h1>
-        <button className="btn primary" onClick={() => setCreating(true)}>＋ 新会话</button>
+        <button
+          className="btn primary"
+          onClick={() => {
+            refreshExecutors(); // 打开前刷新设备状态（用户要求：有意检查注册设备在线情况）
+            setCreating(true);
+          }}
+        >
+          ＋ 新会话
+        </button>
       </header>
       {error && <div className="error-banner" onClick={() => setError("")}>{error} ✕</div>}
 
@@ -234,21 +247,25 @@ function CreateModal({
           key="hub"
           className={`picker-chip ${envId === "hub" ? "on" : ""}`}
           onClick={() => setEnvId("hub")}
-          title="hub 云端主机（阿里云 VM）"
+          title="hub 云端主机（阿里云 VM，常开）"
         >
           ☁ 云端 hub
         </button>
         {executors.filter((e) => e.envId !== "hub").map((e) => (
           <button
             key={e.envId}
-            className={`picker-chip ${envId === e.envId ? "on" : ""}`}
+            className={`picker-chip ${envId === e.envId ? "on" : ""} ${e.online ? "" : "chip-offline"}`}
             onClick={() => setEnvId(e.envId)}
-            title={e.online ? `${e.host} · 在线` : `${e.host} · 离线`}
+            title={e.online ? `${e.host} · 在线` : `${e.host} · 离线（开机并连上 Tailscale 后可用；仍可创建会话，工具调用会等它上线）`}
           >
-            🖥 {e.envId} {!e.online && <span style={{ opacity: 0.5 }}>·离线</span>}
+            🖥 {e.envId}
+            <span className="chip-status">{e.online ? "" : " · 离线"}</span>
           </button>
         ))}
       </div>
+      {executors.some((e) => e.envId !== "hub" && !e.online) && (
+        <div className="offline-hint">灰色 = 设备离线；仍可选择，agent 工具调用会等它上线后自动恢复</div>
+      )}
 
       <label className="picker-label">项目文件夹{currentExec && `（${envLabel(envId, currentExec.host)} 的路径）`}</label>
       <div className="cwd-options">

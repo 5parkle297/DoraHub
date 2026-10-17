@@ -464,6 +464,15 @@ body {
 .picker-chip.on { color: #fff; background: var(--accent); font-weight: 600; }
 .picker-msg { color: var(--yellow); font-size: var(--fs-sm); margin-top: var(--sp-3); }
 
+/* 离线设备：灰化但仍可见可选 */
+.picker-chip.chip-offline { opacity: 0.45; filter: grayscale(0.8); }
+.picker-chip.chip-offline:hover { opacity: 0.7; }
+.chip-status { font-size: var(--fs-xs); }
+.offline-hint {
+  color: var(--text-faint); font-size: var(--fs-xs);
+  margin-top: 6px;
+}
+
 /* /model 式模型列表 */
 .model-search {
   margin-bottom: var(--sp-2);

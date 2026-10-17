@@ -29,6 +29,8 @@ export function ConversationPage({ id }: { id: string }) {
   const [envId, setEnvId] = useState<string | null>(null);
   const [executors, setExecutors] = useState<ExecutorInfo[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  const refreshExecutors = () => api.executors().then(setExecutors).catch(() => {});
   // 首次：HTTP snapshot；随后 WS attach
   useEffect(() => {
     let cancelled = false;
@@ -157,6 +159,7 @@ export function ConversationPage({ id }: { id: string }) {
             current={envId}
             executors={executors}
             onSwitched={(v) => setEnvId(v)}
+            onOpen={refreshExecutors}
           />
           {agentInfo.modelId && (
             <button className="model-tag" title="点击切换模型（/model）">

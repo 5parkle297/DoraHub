@@ -14,17 +14,20 @@ export function EnvSwitcher({
   current,
   executors,
   onSwitched,
+  onOpen,
 }: {
   convId: string;
   current: string | null;
   executors: ExecutorInfo[];
   onSwitched?: (envId: string | null) => void;
+  /** 弹窗打开时触发（父组件刷新执行机状态） */
+  onOpen?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
-  const currentLabel = envLabel(current);
+  const currentLabel = envLabel(current, executors.find((e) => e.envId === current)?.host);
   const switching = current && current !== "hub";
 
   async function switchTo(target: string) {
@@ -46,7 +49,10 @@ export function EnvSwitcher({
       <button
         className="model-tag env-tag"
         title="会话在这台机器上执行，点击切换"
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          onOpen?.();
+          setOpen(true);
+        }}
       >
         {currentLabel}
       </button>
@@ -86,12 +92,13 @@ export function EnvSwitcher({
               .map((e) => (
                 <button
                   key={e.envId}
-                  className={`picker-chip ${current === e.envId ? "on" : ""}`}
+                  className={`picker-chip ${current === e.envId ? "on" : ""} ${e.online ? "" : "chip-offline"}`}
                   disabled={busy}
                   onClick={() => switchTo(e.envId)}
-                  title={e.online ? `${e.host} · 在线` : `${e.host} · 离线`}
+                  title={e.online ? `${e.host} · 在线` : `${e.host} · 离线（可切换；工具调用会等它上线）`}
                 >
-                  🖥 {e.envId} {!e.online && <span style={{ opacity: 0.5 }}>·离线</span>}
+                  🖥 {e.envId}
+                  <span className="chip-status">{e.online ? "" : " · 离线"}</span>
                 </button>
               ))}
           </div>
