@@ -110,11 +110,14 @@ export class ExecRegistry {
     }
   }
 
-  /** 探测一台执行机可达性（/api/executors 用；轻量：hello 一次）。 */
-  async probe(envId: string): Promise<{ envId: string; online: boolean; lastSeen: number | null }> {
+  /** 探测一台执行机可达性。带超时（离线机器的 SSH 连接超时很长，不包超时会拖死
+   *  /api/executors——2026-10-17 手机上实测 60s 无响应的根因）。
+   *  超时后返回当前缓存状态，底层探测继续跑、成功后更新 lastSeen。 */
+  async probe(envId: string, timeoutMs = 5000): Promise<{ envId: string; online: boolean; lastSeen: number | null }> {
     const cfg = this.executors.get(envId);
-    if (!cfg) return { envId, online: false, lastSeen: this.lastSeen.get(envId) ?? null };
-    try {
+    const cached = () => ({ envId, online: false, lastSeen: this.lastSeen.get(envId) ?? null });
+    if (!cfg) return cached();
+    const doProbe = (async () => {
       let conn = this.connections.get(envId);
       if (!conn) {
         conn = sshConnection(this.targetFor(envId, cfg)).connection;
@@ -123,9 +126,28 @@ export class ExecRegistry {
       await conn.info();
       this.lastSeen.set(envId, Date.now());
       return { envId, online: true, lastSeen: this.lastSeen.get(envId)! };
-    } catch {
-      return { envId, online: false, lastSeen: this.lastSeen.get(envId) ?? null };
+    })().catch(() => null); // 失败不抛，留给 race；lastSeen 不动
+    const winner = await Promise.race([
+      doProbe,
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), timeoutMs).unref?.()),
+    ]);
+    if (winner) return winner;
+    return cached(); // 超时/失败：返回缓存（doProbe 仍在后台跑，下次就是新鲜值）
+  }
+
+  /** 后台刷新所有执行机状态（fire-and-forget，/api/executors 用：立即返回缓存）。节流 30s。 */
+  private lastRefresh = 0;
+  refreshProbes(): void {
+    if (Date.now() - this.lastRefresh < 30_000) return;
+    this.lastRefresh = Date.now();
+    for (const envId of this.executors.keys()) {
+      this.probe(envId).catch(() => {});
     }
+  }
+
+  /** 该执行机最近一次探测成功时间（null = 从未）。 */
+  lastSeenOf(envId: string): number | null {
+    return this.lastSeen.get(envId) ?? null;
   }
 
   list(): { envId: string; host: string; defaultCwd: string }[] {

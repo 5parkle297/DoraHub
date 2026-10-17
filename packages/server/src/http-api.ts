@@ -175,13 +175,16 @@ export function createRouter(deps: HttpApiDeps) {
 
     // ---------- 执行机（M4） ----------
     if (path === "/api/executors" && method === "GET") {
+      // 立即返回缓存/配置状态 + 后台刷新（probe 有 SSH 网络开销，离线机器连接
+      // 超时很长——同步等待会把接口拖到分钟级，手机上直接拿不到列表，
+      // 2026-10-17 实测踩坑）。前端下次拉列表自然拿到新鲜状态。
+      deps.execRegistry?.refreshProbes();
       const list = deps.execRegistry?.list() ?? [];
-      const probed = await Promise.all(
-        list.map(async (e) => {
-          const p = await deps.execRegistry!.probe(e.envId);
-          return { ...e, ...p };
-        }),
-      );
+      const probed = list.map((e) => {
+        const lastSeen = deps.execRegistry!.lastSeenOf(e.envId);
+        const fresh = lastSeen != null && Date.now() - lastSeen < 60_000;
+        return { ...e, online: fresh, lastSeen };
+      });
       return json(res, 200, [
         { envId: "hub", host: "local", defaultCwd: process.cwd(), online: true, lastSeen: Date.now() },
         ...probed,
