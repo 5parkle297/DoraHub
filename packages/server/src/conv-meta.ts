@@ -27,11 +27,13 @@ export interface ConvMetaState extends JsonObject {
   autoNamed: boolean;
   /** 上次自动命名时已见用户消息数（节流：每 +5 条用户消息刷新一次） */
   namedAtUserCount: number;
+  /** 软删除（列表隐藏；数据保留——durable 哲学 + fork 历史不断） */
+  hidden: boolean;
 }
 
 export const ConvMetaDoc: RewindableConversationDocToken<ConvMetaState> = defineDoc({
   kind: "dorahub.meta",
-  version: 2,
+  version: 3,
   scope: "conversation",
   history: "rewindable",
   fork: "asOf",
@@ -43,6 +45,7 @@ export const ConvMetaDoc: RewindableConversationDocToken<ConvMetaState> = define
     keywords: [],
     autoNamed: false,
     namedAtUserCount: 0,
+    hidden: false,
   }),
   migrate(value, fromVersion) {
     if (fromVersion < 2) {
@@ -52,7 +55,11 @@ export const ConvMetaDoc: RewindableConversationDocToken<ConvMetaState> = define
         keywords: [],
         autoNamed: false,
         namedAtUserCount: 0,
+        hidden: false,
       };
+    }
+    if (fromVersion < 3) {
+      return { ...(value as any), hidden: false };
     }
     return value as ConvMetaState;
   },

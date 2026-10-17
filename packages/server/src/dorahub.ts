@@ -43,7 +43,7 @@ interface ConvRecord {
   lastPreview: string;
   updatedAt: number;
   /** 元数据（v2 自动命名字段，handoff §0.5-B） */
-  meta: { description: string | null; keywords: string[]; autoNamed: boolean; namedAtUserCount: number; envId: string | null };
+  meta: { description: string | null; keywords: string[]; autoNamed: boolean; namedAtUserCount: number; envId: string | null; hidden: boolean };
   /** agent 配置快照（列表页 model/cwd） */
   model: string | null;
   cwd: string | null;
@@ -82,7 +82,7 @@ export class Dorahub {
       const rec = this.convs.get(convId);
       if (rec) {
         rec.name = title;
-        rec.meta = { description, keywords, autoNamed: true, namedAtUserCount: rec.meta.namedAtUserCount, envId: rec.meta.envId };
+        rec.meta = { description, keywords, autoNamed: true, namedAtUserCount: rec.meta.namedAtUserCount, envId: rec.meta.envId, hidden: rec.meta.hidden };
       }
       this.events.onMeta(convId, { name: title, description, keywords, envId: rec?.meta.envId ?? null });
     };
@@ -133,7 +133,7 @@ export class Dorahub {
     if (this.convs.has(id)) return;
     let name = fallbackName;
     let lastPreview = "";
-    const meta: ConvRecord["meta"] = { description: null, keywords: [], autoNamed: false, namedAtUserCount: 0, envId: null };
+    const meta: ConvRecord["meta"] = { description: null, keywords: [], autoNamed: false, namedAtUserCount: 0, envId: null, hidden: false };
     let model: string | null = null;
     let cwd: string | null = null;
     try {
@@ -147,6 +147,7 @@ export class Dorahub {
         meta.autoNamed = m.autoNamed === true;
         meta.namedAtUserCount = typeof m.namedAtUserCount === "number" ? m.namedAtUserCount : 0;
         meta.envId = m.envId ?? null;
+        meta.hidden = m.hidden === true;
       }
       // agent 配置（pi.agent doc）
       const view = await conv.viewState(context);
@@ -185,7 +186,7 @@ export class Dorahub {
 
   listConversations(): ConversationSummary[] {
     return [...this.convs.values()]
-      .filter((r) => String(r.conv.id) !== this.rootId)
+      .filter((r) => String(r.conv.id) !== this.rootId && !r.meta.hidden)
       .map((r) => ({
         id: String(r.conv.id),
         name: r.name,
@@ -306,6 +307,19 @@ export class Dorahub {
     const src = this.convs.get(id);
     await this.track(forked, src ? `${src.name} (fork)` : "fork");
     return forked;
+  }
+
+  /** 软删除会话（列表隐藏，数据保留——durable 哲学，fork 历史不断）。 */
+  async hideConversation(id: string) {
+    const conv = this.getConv(id);
+    if (!conv) throw new Error(`conversation ${id} not found`);
+    await conv.commit((tx) => {
+      return tx.doc(ConvMetaDoc, conv.id).then((draft) => {
+        draft.hidden = true;
+      });
+    }, context);
+    const rec = this.convs.get(id);
+    if (rec) rec.meta.hidden = true;
   }
 
   /** 重读某会话的 agent 配置（configure 后调用刷新列表页 model/cwd）。 */

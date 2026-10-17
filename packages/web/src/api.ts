@@ -77,6 +77,9 @@ export const api = {
       body: JSON.stringify(entryId ? { entryId } : {}),
     }),
 
+  deleteConversation: (conv: string) =>
+    call<{ ok: true }>(`/api/conversations/${encodeURIComponent(conv)}`, { method: "DELETE" }),
+
   pendingConfirmations: () => call<any[]>("/api/confirmations"),
 
   answerConfirmation: (id: string, approved: boolean) =>

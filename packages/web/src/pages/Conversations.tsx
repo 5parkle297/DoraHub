@@ -131,7 +131,7 @@ export function ConversationsPage() {
               <span className="group-count">{g.items.length} 个会话</span>
             </div>
             {g.items.map((c) => (
-              <ConvCard key={c.id} conv={c} style={{ marginTop: 8 }} />
+              <ConvCard key={c.id} conv={c} style={{ marginTop: 8 }} onDeleted={refresh} />
             ))}
           </div>
         ))}
@@ -151,8 +151,19 @@ export function ConversationsPage() {
   );
 }
 
-function ConvCard({ conv, style }: { conv: ConversationSummary; style?: React.CSSProperties }) {
+function ConvCard({ conv, style, onDeleted }: { conv: ConversationSummary; style?: React.CSSProperties; onDeleted?: () => void }) {
   const unnamed = !conv.name;
+  const [confirming, setConfirming] = useState(false);
+
+  async function doDelete(e: React.MouseEvent) {
+    e.stopPropagation();
+    try {
+      await api.deleteConversation(conv.id);
+      setConfirming(false);
+      onDeleted?.();
+    } catch { /* 下次刷新重试 */ }
+  }
+
   return (
     <div
       className="conv-item"
@@ -165,6 +176,20 @@ function ConvCard({ conv, style }: { conv: ConversationSummary; style?: React.CS
         </span>
         {conv.status === "running" && <span className="badge-running">● 运行中</span>}
         <span className="conv-time">{relTime(conv.updatedAt)}</span>
+        {confirming ? (
+          <>
+            <button className="conv-del" onClick={doDelete}>确认删</button>
+            <button className="conv-del cancel" onClick={(e) => { e.stopPropagation(); setConfirming(false); }}>取消</button>
+          </>
+        ) : (
+          <button
+            className="conv-del"
+            title="从列表移除（对话数据保留）"
+            onClick={(e) => { e.stopPropagation(); setConfirming(true); }}
+          >
+            ✕
+          </button>
+        )}
       </div>
       {(conv.envId || conv.cwd) && (
         <div className="conv-env">

@@ -120,6 +120,13 @@ export function createRouter(deps: HttpApiDeps) {
         return json(res, 200, { ok: true });
       }
 
+      if (sub === "" && method === "DELETE") {
+        // 软删除（列表隐藏，数据保留）
+        await app.hideConversation(convId);
+        audit.log("hide_conversation", { conv: convId });
+        return json(res, 200, { ok: true });
+      }
+
       if (sub === "transfer" && method === "POST") {
         // 会话工作区跨机迁移（2026-10-17 会话漫游 MVP）
         const body = JSON.parse((await readBody(req)).toString("utf8"));

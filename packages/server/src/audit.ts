@@ -19,6 +19,7 @@ export type AuditEvent =
   | "transfer"
   | "pi_session_list"
   | "pi_session_transfer"
+  | "hide_conversation"
   | "shutdown";
 
 export class AuditLog {
