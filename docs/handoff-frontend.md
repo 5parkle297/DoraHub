@@ -208,6 +208,27 @@ React 18.3 + Vite 6 + TS，**无 UI 组件库**（当初的决策是"简历叙�
 - **PATH 注入坑（2026-10-17）**：daemon 起 bash 是非登录 shell 不读 profile → Git usr/bin 里的 coreutils（uname/sed/awk）不在 PATH（command not found）。解法 = registry 的 `shellEnvFor()` 从 shellPath 推导 usr/bin + mingw64/bin 前插 PATH（RemoteExecutionEnv shellEnv）
 - workpc/laptop 关机时会话工具报错但状态无损，开机自动重连（pi-env 懒连接）
 
+### 会话漫游 MVP（2026-10-17，用户设想驱动）
+
+用户原话：「云端直接把我在上台机器运用到的所有参考文件以及模型思考、agent运行产生的所有过程文件放到新的要继续会话的机器上，并产生文件路径映射……实现真正意义上的无感切换」。
+
+- **已实现**：EnvSwitcher 变成迁移向导（选目标机器 + 目标路径 + 可选同步工作区）→
+  harvest（从会话历史挖 read/write/edit 用过的文件，排除 node_modules/.git/dist）→
+  中转搬运（旧机 RemoteExecutionEnv.readBinaryFile → hub 内存 → 新机 writeFile，
+  单文件 ≤2MB / 总量 ≤50MB）→ setEnvId + configure cwd → 返回校准 notice →
+  前端预填 composer → 用户发送 → agent 自己 read 关键文件对齐（"预置 skill"思路的落地）
+- API：POST /api/conversations/:id/transfer {targetEnvId, targetCwd} → {report, notice}
+- **端到端验证**（hub 云端）：laptop(F:/group/migrate-test) → workpc(D:/hobby/pi-durable)，
+  1 文件 23B 搬运成功内容一致；校准 notice 预填流程完整
+- 已知限制：bash 产生的文件挖不到（黑盒，notice 里已告知 agent）；大项目建议走 git；
+  bash 里的 MSYS 路径（/f/...）工具不能直接用（read 报 '\\d\\hobby...' 错误路径）——
+  agent 需用 Windows 形式路径调 read/write
+- **driveCwds 踩坑**：daemon 报 cwd=C:\Users\shiyu、driveCwds 只有 C:——SSH 会话启动的
+  daemon 没有继承 D: 盘的工作目录。相对路径经 RemoteExecutionEnv 的 #resolve 会用
+  构造时传的 cwd 拼（正确），但绝对路径直接透传 daemon fs（也正确）。真正诡异的是
+  write/read 的相对路径解析会受 daemon 进程 cwd 影响——验证时注意 agent 用相对路径写文件
+  的落点由 RemoteExecutionEnv 的 cwd 参数决定，与 bash 的 pwd 是两套体系
+
 ## 7. 验收基线（改完后这些必须仍然通过）
 
 - **S1 双设备**：两个 tab 同会话，一边发消息另一边实时流式渲染，历史一致
