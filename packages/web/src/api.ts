@@ -53,6 +53,18 @@ export const api = {
 
   executors: () => call<import("@dorahub/shared").ExecutorInfo[]>("/api/executors"),
 
+  piSessions: (env: string) =>
+    call<{
+      envId: string; file: string; dir: string; sessionId: string;
+      cwd: string; mtime: number; preview: string; size: number;
+    }[]>(`/api/pi-sessions?env=${encodeURIComponent(env)}`),
+
+  piSessionTransfer: (req: { sourceEnvId: string; file: string; dir: string; targetEnvId: string; targetCwd: string }) =>
+    call<{ ok: true; targetFile: string; bytes: number }>("/api/pi-sessions/transfer", {
+      method: "POST",
+      body: JSON.stringify(req),
+    }),
+
   transfer: (conv: string, req: { targetEnvId: string; targetCwd: string }) =>
     call<{ report: { copied: number; skipped: number; totalBytes: number; errors: string[] }; notice: string }>(
       `/api/conversations/${encodeURIComponent(conv)}/transfer`,

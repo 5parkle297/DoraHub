@@ -17,6 +17,8 @@ export type AuditEvent =
   | "fork"
   | "configure"
   | "transfer"
+  | "pi_session_list"
+  | "pi_session_transfer"
   | "shutdown";
 
 export class AuditLog {

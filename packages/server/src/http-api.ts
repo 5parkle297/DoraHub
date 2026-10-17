@@ -188,6 +188,38 @@ export function createRouter(deps: HttpApiDeps) {
       return json(res, 200, channelCatalog(deps.channels ?? []));
     }
 
+    // ---------- pi CLI 会话（按需单会话搬运，2026-10-17） ----------
+    if (path === "/api/pi-sessions" && method === "GET") {
+      const url2 = new URL(req.url ?? "/", "http://local");
+      const envId = url2.searchParams.get("env") ?? "hub";
+      if (!deps.execRegistry) return json(res, 200, []);
+      try {
+        const { listPiSessions } = await import("./pi-sessions.ts");
+        // hub 自身的 pi 会话也扫（本机目录）
+        const sessions = await listPiSessions(deps.execRegistry, envId);
+        return json(res, 200, sessions);
+      } catch (e: any) {
+        return err(res, 500, "pi_session_list_failed", String(e?.message ?? e));
+      }
+    }
+
+    if (path === "/api/pi-sessions/transfer" && method === "POST") {
+      const body = JSON.parse((await readBody(req)).toString("utf8"));
+      const { sourceEnvId, file, dir, targetEnvId, targetCwd } = body;
+      if (!sourceEnvId || !file || !dir || !targetEnvId || !targetCwd) {
+        return err(res, 400, "bad_request", "sourceEnvId/file/dir/targetEnvId/targetCwd required");
+      }
+      try {
+        const { transferPiSession } = await import("./pi-sessions.ts");
+        const r = await transferPiSession(deps.execRegistry!, sourceEnvId, file, dir, targetEnvId, targetCwd);
+        audit.log("pi_session_transfer", { from: sourceEnvId, to: targetEnvId, file, ok: r.ok, bytes: r.bytes });
+        if (!r.ok) return err(res, 500, "pi_session_transfer_failed", r.error ?? "unknown");
+        return json(res, 200, r);
+      } catch (e: any) {
+        return err(res, 500, "pi_session_transfer_failed", String(e?.message ?? e));
+      }
+    }
+
     // ---------- 执行机（M4） ----------
     if (path === "/api/executors" && method === "GET") {
       // 立即返回缓存/配置状态 + 后台刷新（probe 有 SSH 网络开销，离线机器连接

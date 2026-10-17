@@ -6,6 +6,7 @@ import { wsClient } from "../ws.ts";
 import { navigate } from "../route.ts";
 import { relTime } from "../util/time.ts";
 import { Modal } from "../components/Modal.tsx";
+import { PiSessionsSection } from "../components/PiSessions.tsx";
 import type { ConversationSummary, ExecutorInfo } from "@dorahub/shared";
 
 /** cwd → 项目显示名（basename） */
@@ -134,6 +135,9 @@ export function ConversationsPage() {
             ))}
           </div>
         ))}
+
+        {/* pi CLI 会话（按需搬运到另一台机器，2026-10-17） */}
+        <PiSessionsSection executors={executors} />
       </div>
 
       {creating && (
