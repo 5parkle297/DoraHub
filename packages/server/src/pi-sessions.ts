@@ -97,9 +97,9 @@ export async function listPiSessions(execRegistry: ExecRegistry, envId: string, 
   // 原实现逐文件 3 条 SSH 命令（列目录+head+grep）= 27 会话 80+ 次 RTT ≈ 十几秒。
   // 合并成远端 bash 循环，一条命令回来。分隔符：SOH 文件meta、STX header、ETX lastUser、NUL 记录尾。
   const SCAN_LIMIT = 40;
-  const scan = `for dir in ~/.pi/agent/sessions/--*--; do [ -d "$dir" ] || continue; for f in "$dir"/*.jsonl; do [ -f "$f" ] || continue; printf '\x01%s\t%s\t%s\t%s\x02' "$(basename "$dir")" "$(basename "$f")" "$(stat -c %Y "$f")" "$(stat -c %s "$f")"; head -c 2048 "$f" | head -1 | cut -c1-600 | tr '
-' ' '; printf '\x03'; grep '"role":"user"' "$f" | tail -1 | cut -c1-2500 | tr '
-' ' '; printf '\x00'; done; done | head -${SCAN_LIMIT}`;
+  const scan = `for dir in ~/.pi/agent/sessions/--*--; do [ -d "$dir" ] || continue; for f in "$dir"/*.jsonl; do [ -f "$f" ] || continue; printf '\\x01%s\t%s\t%s\t%s\\x02' "$(basename "$dir")" "$(basename "$f")" "$(stat -c %Y "$f")" "$(stat -c %s "$f")"; head -c 2048 "$f" | head -1 | cut -c1-600 | tr '
+' ' '; printf '\\x03'; grep '"role":"user"' "$f" | tail -1 | cut -c1-2500 | tr '
+' ' '; printf '\\x00'; done; done | head -${SCAN_LIMIT}`;
   const scanOut = await sh(env, scan);
 
   for (const record of scanOut.split("NUL").filter((r) => r.includes("SOH"))) {
