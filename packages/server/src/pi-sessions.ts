@@ -137,7 +137,7 @@ export async function transferPiSession(
   if (!source || !target) return { ok: false, targetFile: "", bytes: 0, error: "executor not available" };
 
   // 1. 源机读全文（readTextFile：daemon 文件通道，相对路径基于 home）
-  const rr = await source.readTextFile(`.pi/agent/sessions/${dir}/${file}`);
+  const rr = await source.readTextFile(`.pi/agent/sessions/${dir}/${file}`, BACKGROUND_CONTEXT);
   if (!rr.ok) return { ok: false, targetFile: "", bytes: 0, error: `read failed: ${rr.error.message}` };
   let text = rr.value;
   if (!text.trim()) return { ok: false, targetFile: "", bytes: 0, error: "empty file" };
