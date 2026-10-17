@@ -120,6 +120,21 @@ export function createRouter(deps: HttpApiDeps) {
         return json(res, 200, { ok: true });
       }
 
+      if (sub === "transfer" && method === "POST") {
+        // 会话工作区跨机迁移（2026-10-17 会话漫游 MVP）
+        const body = JSON.parse((await readBody(req)).toString("utf8"));
+        const targetEnvId = String(body.targetEnvId ?? "hub");
+        const targetCwd = String(body.targetCwd ?? "");
+        if (!targetCwd) return err(res, 400, "bad_request", "targetCwd required");
+        try {
+          const { report, notice } = await app.transferWorkspace(convId, targetEnvId, targetCwd, deps.execRegistry!);
+          audit.log("transfer", { conv: convId, from: report.sourceEnv, to: report.targetEnv, copied: report.copied, skipped: report.skipped });
+          return json(res, 200, { report, notice });
+        } catch (e: any) {
+          return err(res, 500, "transfer_failed", String(e?.message ?? e));
+        }
+      }
+
       if (sub === "configure" && method === "POST") {
         const body = JSON.parse((await readBody(req)).toString("utf8"));
         if (typeof body.name === "string" && body.name) {

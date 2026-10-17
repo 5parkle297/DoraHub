@@ -320,6 +320,50 @@ export class Dorahub {
     } catch { /* 忽略 */ }
   }
 
+  /**
+   * 会话工作区跨机迁移（会话漫游 MVP，2026-10-17）。
+   * harvest → 中转搬运 → 返回给 agent 的校准提示（前端预填到 composer，
+   * 用户发送后进上下文——比服务端硬塞 entry 透明）。
+   */
+  async transferWorkspace(
+    id: string,
+    targetEnvId: string,
+    targetCwd: string,
+    execRegistry: import("./exec/registry.ts").ExecRegistry,
+    onProgress?: (done: number, total: number) => void,
+  ): Promise<{ report: import("./transfer.ts").TransferReport; notice: string }> {
+    const conv = this.getConv(id);
+    if (!conv) throw new Error(`conversation ${id} not found`);
+    const rec = this.convs.get(id)!;
+    const sourceEnv = rec.meta.envId ?? "hub";
+    const sourceCwd = rec.cwd ?? "";
+    if (sourceEnv === targetEnvId) throw new Error("source and target are the same machine");
+
+    // 1. 挖文件清单
+    const { harvestWorkspace } = await import("./workspace-harvest.ts");
+    const harvest = await harvestWorkspace(conv, sourceCwd);
+
+    // 2. 两端的 env
+    const sourceEnvObj = await execRegistry.buildForEnv(sourceEnv, sourceCwd);
+    const targetEnvObj = await execRegistry.buildForEnv(targetEnvId, targetCwd);
+    if (!sourceEnvObj || !targetEnvObj) throw new Error("executor not available");
+
+    // 3. 搬运
+    const { transferFiles, migrationNotice } = await import("./transfer.ts");
+    const report = harvest.files.length
+      ? await transferFiles(harvest.files, sourceEnvObj, targetEnvObj, targetCwd, onProgress)
+      : { ok: true, copied: 0, skipped: 0, totalBytes: 0, errors: [], sourceEnv: sourceEnvObj.id, targetEnv: targetEnvObj.id, targetCwd };
+
+    // 4. 切目标机 + cwd
+    await this.setEnvId(id, targetEnvId);
+    await conv.configure({ cwd: targetCwd || undefined }, context);
+    await this.refreshAgent(id);
+
+    // 5. 校准提示（返回给前端预填）
+    const notice = migrationNotice(report, sourceCwd);
+    return { report, notice };
+  }
+
   /** 拿一次性 snapshot（HTTP GET /snapshot 用，不订阅）。 */
   async snapshot(id: string) {
     const conv = this.getConv(id);

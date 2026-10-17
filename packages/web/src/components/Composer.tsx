@@ -1,17 +1,34 @@
-/** 输入区（06 §2）：普通发送 / steer 开关 / 自动增高。 */
-import { useRef, useState } from "react";
+/** 输入区（06 §2）：普通发送 / steer 开关 / 自动增高。
+ * draft：外部预填（工作区迁移后的校准提示）——用户可改可发，发送后 onDraftConsumed 清空。 */
+import { useEffect, useRef, useState } from "react";
 
 export function Composer({
   disabled,
+  draft,
+  onDraftConsumed,
   onSend,
 }: {
   disabled: boolean;
+  draft?: string;
+  onDraftConsumed?: () => void;
   onSend: (text: string, mode: "input" | "steer") => Promise<void>;
 }) {
   const [text, setText] = useState("");
   const [steer, setSteer] = useState(false);
   const [sending, setSending] = useState(false);
   const taRef = useRef<HTMLTextAreaElement>(null);
+
+  // 外部 draft 到达 → 预填并聚焦（迁移完成后引导用户发送校准提示）
+  useEffect(() => {
+    if (draft) {
+      setText(draft);
+      taRef.current?.focus();
+      requestAnimationFrame(() => {
+        const el = taRef.current;
+        if (el) { el.style.height = "auto"; el.style.height = Math.min(el.scrollHeight, 160) + "px"; }
+      });
+    }
+  }, [draft]);
 
   // 移动端虚拟键盘适配：viewport meta 的 interactive-widget=resizes-content
   // （index.html，Android Chrome 108+ 原生把键盘算进视口高度）；iOS Safari 自行处理 fixed 底栏
@@ -37,6 +54,7 @@ export function Composer({
     try {
       await onSend(t, steer ? "steer" : "input");
       setText("");
+      onDraftConsumed?.();
       requestAnimationFrame(autoGrow);
     } finally {
       setSending(false);

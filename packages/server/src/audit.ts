@@ -16,6 +16,7 @@ export type AuditEvent =
   | "create_conversation"
   | "fork"
   | "configure"
+  | "transfer"
   | "shutdown";
 
 export class AuditLog {

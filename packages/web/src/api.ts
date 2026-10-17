@@ -53,6 +53,12 @@ export const api = {
 
   executors: () => call<import("@dorahub/shared").ExecutorInfo[]>("/api/executors"),
 
+  transfer: (conv: string, req: { targetEnvId: string; targetCwd: string }) =>
+    call<{ report: { copied: number; skipped: number; totalBytes: number; errors: string[] }; notice: string }>(
+      `/api/conversations/${encodeURIComponent(conv)}/transfer`,
+      { method: "POST", body: JSON.stringify(req) },
+    ),
+
   fork: (conv: string, entryId?: string) =>
     call<{ id: string }>(`/api/conversations/${encodeURIComponent(conv)}/fork`, {
       method: "POST",

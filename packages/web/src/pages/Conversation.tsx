@@ -27,7 +27,9 @@ export function ConversationPage({ id }: { id: string }) {
   const [agentInfo, setAgentInfo] = useState<{ provider?: string; modelId?: string; thinkingLevel?: string | null }>({});
   const [agentTick, setAgentTick] = useState(0);
   const [envId, setEnvId] = useState<string | null>(null);
+  const [convCwd, setConvCwd] = useState<string | null>(null);
   const [executors, setExecutors] = useState<ExecutorInfo[]>([]);
+  const [migrationDraft, setMigrationDraft] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const refreshExecutors = () => api.executors().then(setExecutors).catch(() => {});
@@ -93,6 +95,7 @@ export function ConversationPage({ id }: { id: string }) {
       if (c) {
         if (c.name) setConvName(c.name);
         setEnvId(c.envId);
+        setConvCwd(c.cwd);
       }
     }).catch(() => {});
     api.executors().then(setExecutors).catch(() => {});
@@ -157,9 +160,11 @@ export function ConversationPage({ id }: { id: string }) {
           <EnvSwitcher
             convId={id}
             current={envId}
+            currentCwd={convCwd}
             executors={executors}
             onSwitched={(v) => setEnvId(v)}
             onOpen={refreshExecutors}
+            onMigrationNotice={(notice) => setMigrationDraft(notice)}
           />
           {agentInfo.modelId && (
             <button className="model-tag" title="点击切换模型（/model）">
@@ -227,6 +232,8 @@ export function ConversationPage({ id }: { id: string }) {
 
       <Composer
         disabled={false}
+        draft={migrationDraft}
+        onDraftConsumed={() => setMigrationDraft("")}
         onSend={async (text, mode) => {
           try {
             await api.send(id, { content: text, mode });

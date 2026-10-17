@@ -473,6 +473,15 @@ body {
   margin-top: 6px;
 }
 
+/* 迁移中 spinner */
+.transfer-spin {
+  width: 28px; height: 28px;
+  border: 3px solid var(--bg-sunken);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+}
+
 /* /model 式模型列表 */
 .model-search {
   margin-bottom: var(--sp-2);

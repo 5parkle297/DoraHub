@@ -150,6 +150,28 @@ export class ExecRegistry {
     return this.lastSeen.get(envId) ?? null;
   }
 
+  /** 为迁移等场景构建指定机器的 ExecutionEnv（不依赖会话的 envId）。 */
+  async buildForEnv(envId: string, cwd: string): Promise<import("@earendil-works/pi-durable/env").ExecutionEnv | null> {
+    if (envId === "hub" || !envId) {
+      return new NodeExecutionEnv({ cwd: cwd || this.opts.hubCwd });
+    }
+    const cfg = this.executors.get(envId);
+    if (!cfg) return null;
+    let conn = this.connections.get(envId);
+    if (!conn) {
+      conn = sshConnection(this.targetFor(envId, cfg)).connection;
+      this.connections.set(envId, conn);
+    }
+    const shellEnv = this.shellEnvFor(cfg);
+    return new RemoteExecutionEnv({
+      connection: conn,
+      id: `pi-env:${envId}`,
+      cwd: cwd || cfg.defaultCwd,
+      ...(cfg.shellPath ? { shellPath: cfg.shellPath } : {}),
+      ...(shellEnv ? { shellEnv } : {}),
+    });
+  }
+
   list(): { envId: string; host: string; defaultCwd: string }[] {
     return [...this.executors.entries()].map(([envId, cfg]) => ({
       envId,
