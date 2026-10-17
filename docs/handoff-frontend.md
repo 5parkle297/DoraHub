@@ -208,6 +208,29 @@ React 18.3 + Vite 6 + TS，**无 UI 组件库**（当初的决策是"简历叙�
 - **PATH 注入坑（2026-10-17）**：daemon 起 bash 是非登录 shell 不读 profile → Git usr/bin 里的 coreutils（uname/sed/awk）不在 PATH（command not found）。解法 = registry 的 `shellEnvFor()` 从 shellPath 推导 usr/bin + mingw64/bin 前插 PATH（RemoteExecutionEnv shellEnv）
 - workpc/laptop 关机时会话工具报错但状态无损，开机自动重连（pi-env 懒连接）
 
+### pi CLI 会话按需搬运（2026-10-17，用户需求）
+
+用户原话：「在这台电脑的 pi 中产生的会话，我可以在另一台电脑 pi 中通过 /resume 看到」——但要按需搬运而非全量同步。
+
+**路径调研结论**：pi 的会话存储是纯本地文件（~/.pi/agent/sessions/--<编码路径>--/<ts>_<uuid>.jsonl），
+无远端源插件（--session-dir 只收本地路径）→ “pi 直连 hub”不可行（要改 pi 本体）。
+但 pi 到 pi 同构 → 纯文件搬运零转换。
+
+**实现**：
+- GET /api/pi-sessions?env=：SSH 扫执行机的 sessions 目录（printf+stat 结构化列文件，
+  grep 找最后一条 user 消息做 preview；不解析 ls -l 列数——owner/group 列数不稳）
+- POST /api/pi-sessions/transfer：readTextFile（daemon 文件通道，相对路径基于 home）→
+  改写 header cwd 为目标机路径 → writeFile 落到目标机的 --<目标cwd编码>-- 目录。
+  **不走 shell 搬文件**（Windows 命令行 32K 限制，base64 分块也炸 os error 206）
+- 前端：列表页底部「⌨ 本机 pi 会话」折叠区（按机器扫，徽章标注来源）+ 搬运向导
+  （选目标机 + 目标路径——源路径不自动映射，用户填目标机真实存在的项目路径）
+
+**端到端验证**：workpc(1.5MB 会话) → laptop F:/group 落盘成功、header cwd 改写正确；
+workpc 同机搬运后 `pi --session <id> -p` 能加载对话（/resume 同源）。
+
+**踩坑**：laptop 的实际用户目录是 `C:\Users\shigu`（不是 shigure）——daemon info.home 才是
+事实源；SSH 默认 shell 是 cmd.exe（ls/head 不可用），pi-env 的 exec 走 Git Bash 但裸 ssh 不行。
+
 ### 会话漫游 MVP（2026-10-17，用户设想驱动）
 
 用户原话：「云端直接把我在上台机器运用到的所有参考文件以及模型思考、agent运行产生的所有过程文件放到新的要继续会话的机器上，并产生文件路径映射……实现真正意义上的无感切换」。
