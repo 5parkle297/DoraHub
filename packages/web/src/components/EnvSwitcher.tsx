@@ -38,7 +38,7 @@ export function EnvSwitcher({
   const [targetCwd, setTargetCwd] = useState("");
   const [migrate, setMigrate] = useState(true);
   const [error, setError] = useState("");
-  const [result, setResult] = useState<{ copied: number; skipped: number; bytes: number } | null>(null);
+  const [result, setResult] = useState<{ copied: number; skipped: number; oversize: string[]; bytes: number } | null>(null);
   const [busy, setBusy] = useState(false);
 
   const currentLabel = envLabel(current, executors.find((e) => e.envId === current)?.host);
@@ -71,7 +71,7 @@ export function EnvSwitcher({
       }
       setPhase("transferring");
       const { report, notice } = await api.transfer(convId, { targetEnvId: target, targetCwd: targetCwd.trim() });
-      setResult({ copied: report.copied, skipped: report.skipped, bytes: report.totalBytes });
+      setResult({ copied: report.copied, skipped: report.skipped, oversize: report.oversize ?? [], bytes: report.totalBytes });
       onSwitched?.(target === "hub" ? null : target);
       onMigrationNotice?.(notice);
       setPhase("done");
@@ -145,7 +145,7 @@ export function EnvSwitcher({
                     onChange={(e) => setTargetCwd(e.target.value)}
                   />
                   <div className="offline-hint">
-                    迁移 = 挖出会话里 read/write/edit 过的文件 → 搬到新机（单文件 ≤2MB，总量 ≤50MB，
+                    迁移 = 挖出会话里 read/write/edit 过的文件 → 搬到新机（单文件 ≤50MB、总量 ≤200MB，
                     node_modules/.git 不搬）。完成后自动插入一段校准提示，发送后 agent 会先核对关键文件再继续。
                   </div>
                 </>
@@ -186,9 +186,18 @@ export function EnvSwitcher({
               <div style={{ fontSize: "var(--fs-sm)", lineHeight: 1.7, color: "var(--text-dim)" }}>
                 已同步 <strong style={{ color: "var(--green)" }}>{result?.copied} 个文件</strong>
                 （{((result?.bytes ?? 0) / 1024).toFixed(0)}KB）
-                {result?.skipped ? `，${result.skipped} 个跳过（超限或读取失败）` : ""}
+                {result?.skipped ? `，${result.skipped} 个读写失败` : ""}
                 <br />会话现在在 {envLabel(target)} 上执行。
               </div>
+              {result && result.oversize.length > 0 && (
+                <div className="env-warning" style={{ marginTop: 8 }}>
+                  ⚠ {result.oversize.length} 个文件超出大小上限未同步：
+                  <div style={{ marginTop: 4, fontSize: "var(--fs-xs)", wordBreak: "break-all" }}>
+                    {result.oversize.slice(0, 8).join("、")}{result.oversize.length > 8 ? " 等" : ""}
+                  </div>
+                  需要的话请手动搬运（scp/网盘/git），校准提示里已告知 agent。
+                </div>
+              )}
               <div className="offline-hint">
                 校准提示已填入输入框——发送它，agent 会先核对关键文件再继续任务。
               </div>

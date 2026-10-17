@@ -352,7 +352,7 @@ export class Dorahub {
     const { transferFiles, migrationNotice } = await import("./transfer.ts");
     const report = harvest.files.length
       ? await transferFiles(harvest.files, sourceEnvObj, targetEnvObj, targetCwd, onProgress)
-      : { ok: true, copied: 0, skipped: 0, totalBytes: 0, errors: [], sourceEnv: sourceEnvObj.id, targetEnv: targetEnvObj.id, targetCwd };
+      : { ok: true, copied: 0, skipped: 0, oversize: [], totalBytes: 0, errors: [], sourceEnv: sourceEnvObj.id, targetEnv: targetEnvObj.id, targetCwd };
 
     // 4. 切目标机 + cwd
     await this.setEnvId(id, targetEnvId);

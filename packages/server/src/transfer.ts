@@ -16,13 +16,18 @@
 import type { ExecutionEnv } from "@earendil-works/pi-durable/env";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 
-const MAX_FILE_BYTES = 2 * 1024 * 1024; // 单文件 2MB
-const MAX_TOTAL_BYTES = 50 * 1024 * 1024; // 总量 50MB
+/** 单文件上限（默认 50MB；环境变量 DORAHUB_MIGRATE_MAX_FILE_MB 可调） */
+const MAX_FILE_BYTES = (Number(process.env.DORAHUB_MIGRATE_MAX_FILE_MB) || 50) * 1024 * 1024;
+/** 总量上限（默认 200MB；DORAHUB_MIGRATE_MAX_TOTAL_MB） */
+const MAX_TOTAL_BYTES = (Number(process.env.DORAHUB_MIGRATE_MAX_TOTAL_MB) || 200) * 1024 * 1024;
 
 export interface TransferReport {
   ok: boolean;
   copied: number;
-  skipped: number; // 超限/读失败/写失败
+  /** 读/写失败的文件（真错误） */
+  skipped: number;
+  /** 超限未搬的文件（不是错误——列出来让用户决定怎么处理） */
+  oversize: string[];
   totalBytes: number;
   errors: string[]; // 前 10 条
   sourceEnv: string;
@@ -39,7 +44,7 @@ export async function transferFiles(
   onProgress?: (done: number, total: number) => void,
 ): Promise<TransferReport> {
   const report: TransferReport = {
-    ok: true, copied: 0, skipped: 0, totalBytes: 0,
+    ok: true, copied: 0, skipped: 0, oversize: [], totalBytes: 0,
     errors: [], sourceEnv: source.id, targetEnv: target.id, targetCwd,
   };
   const ctx = BACKGROUND_CONTEXT;
@@ -55,14 +60,12 @@ export async function transferFiles(
       }
       const bytes = read.value;
       if (bytes.length > MAX_FILE_BYTES) {
-        report.skipped++;
-        if (report.errors.length < 10) report.errors.push(`skip ${rel}: ${bytes.length}B > 2MB`);
+        report.oversize.push(`${rel} (${(bytes.length / 1024 / 1024).toFixed(1)}MB)`);
         done++; onProgress?.(done, files.length);
         continue;
       }
       if (report.totalBytes + bytes.length > MAX_TOTAL_BYTES) {
-        report.skipped++;
-        if (report.errors.length < 10) report.errors.push(`skip ${rel}: total > 50MB`);
+        report.oversize.push(`${rel} (总量超限)`);
         done++; onProgress?.(done, files.length);
         continue;
       }
@@ -83,7 +86,7 @@ export async function transferFiles(
     done++;
     onProgress?.(done, files.length);
   }
-  report.ok = report.skipped === 0 || report.copied > 0;
+  report.ok = report.copied > 0 || files.length === 0;
   return report;
 }
 
@@ -92,12 +95,17 @@ export function migrationNotice(report: TransferReport, sourceCwd: string): stri
   const lines = [
     "[workspace migrated]",
     `本会话的工作区刚从 ${report.sourceEnv}（${sourceCwd}）迁移到 ${report.targetEnv}（${report.targetCwd}）。`,
-    `已同步 ${report.copied} 个文件（${(report.totalBytes / 1024).toFixed(0)}KB）${report.skipped ? `，${report.skipped} 个跳过` : ""}。`,
+    `已同步 ${report.copied} 个文件（${(report.totalBytes / 1024).toFixed(0)}KB）${report.skipped ? `，${report.skipped} 个读取/写入失败` : ""}。`,
+  ];
+  if (report.oversize.length > 0) {
+    lines.push(`以下文件超出大小上限未自动同步，可能需要用户手动处理或重新生成：${report.oversize.slice(0, 10).join("、")}${report.oversize.length > 10 ? " 等" : ""}。`);
+  }
+  lines.push(
     "注意事项：",
     `1. 路径基准已变为 ${report.targetCwd}，旧记忆里的绝对路径作废，相对路径仍然有效；`,
     "2. bash 命令产生过的文件可能没有迁移（无法从历史枚举）；",
     "3. node_modules/.git 等未迁移，如需构建请先安装依赖。",
     "请先重新 read 你记忆中本任务的关键文件校准状态（文件可能与旧机器版本不同），确认无误后继续任务。不要向用户复述本提示。",
-  ];
+  );
   return lines.join("\n");
 }

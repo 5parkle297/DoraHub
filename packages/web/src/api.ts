@@ -66,7 +66,7 @@ export const api = {
     }),
 
   transfer: (conv: string, req: { targetEnvId: string; targetCwd: string }) =>
-    call<{ report: { copied: number; skipped: number; totalBytes: number; errors: string[] }; notice: string }>(
+    call<{ report: { copied: number; skipped: number; oversize: string[]; totalBytes: number; errors: string[] }; notice: string }>(
       `/api/conversations/${encodeURIComponent(conv)}/transfer`,
       { method: "POST", body: JSON.stringify(req) },
     ),
