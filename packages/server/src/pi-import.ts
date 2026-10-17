@@ -79,17 +79,18 @@ export async function importPiSession(
     {
       ownership: { kind: "ownerless" },
       agent: { ...(firstModel ? { model: firstModel } : {}), cwd },
-      init: (tx, conversationId) => {
+      init: async (tx, conversationId) => {
+        // 必须逐个 await：commit 回调要等所有 Tx 操作落定（settled before pending = 没等）
         for (const l of lines) {
           if (l.kind === "user") {
-            tx.appendEntry(conversationId, { kind: "pi.user", model: [l.msg] });
+            await tx.appendEntry(conversationId, { kind: "pi.user", model: [l.msg] });
           } else if (l.kind === "assistant") {
-            tx.appendEntry(conversationId, {
+            await tx.appendEntry(conversationId, {
               kind: "pi.assistant",
               model: [{ ...l.msg, stopReason: l.msg.stopReason ?? "stop" }],
             });
           } else {
-            tx.appendEntry(conversationId, {
+            await tx.appendEntry(conversationId, {
               kind: "pi.tool-result",
               model: [l.msg],
             });
