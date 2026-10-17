@@ -150,8 +150,9 @@ export class ExecRegistry {
     return this.lastSeen.get(envId) ?? null;
   }
 
-  /** 为迁移等场景构建指定机器的 ExecutionEnv（不依赖会话的 envId）。 */
-  async buildForEnv(envId: string, cwd: string): Promise<import("@earendil-works/pi-durable/env").ExecutionEnv | null> {
+  /** 为迁移等场景构建指定机器的 ExecutionEnv（不依赖会话的 envId）。cwd 传 null
+   *  → 用 daemon 的 home（Windows 上 /tmp、~ 都不是真实路径，必须用 info.home）。 */
+  async buildForEnv(envId: string, cwd: string | null): Promise<import("@earendil-works/pi-durable/env").ExecutionEnv | null> {
     if (envId === "hub" || !envId) {
       return new NodeExecutionEnv({ cwd: cwd || this.opts.hubCwd });
     }
@@ -162,11 +163,18 @@ export class ExecRegistry {
       conn = sshConnection(this.targetFor(envId, cfg)).connection;
       this.connections.set(envId, conn);
     }
+    let resolvedCwd = cwd || cfg.defaultCwd;
+    if (cwd === null) {
+      try {
+        const info = await conn.info();
+        resolvedCwd = info.home;
+      } catch { /* 用 defaultCwd */ }
+    }
     const shellEnv = this.shellEnvFor(cfg);
     return new RemoteExecutionEnv({
       connection: conn,
       id: `pi-env:${envId}`,
-      cwd: cwd || cfg.defaultCwd,
+      cwd: resolvedCwd,
       ...(cfg.shellPath ? { shellPath: cfg.shellPath } : {}),
       ...(shellEnv ? { shellEnv } : {}),
     });
