@@ -47,7 +47,8 @@ export interface PiSessionInfo {
 
 /** 列出一台机器上的 pi 会话（读每个文件头 2KB 做摘要）。 */
 export async function listPiSessions(execRegistry: ExecRegistry, envId: string): Promise<PiSessionInfo[]> {
-  const env = await execRegistry.buildForEnv(envId, "~");
+  // cwd 用 /tmp（RemoteExecutionEnv 需要存在的目录；所有命令都用绝对/~ 路径，与 cwd 无关）
+  const env = await execRegistry.buildForEnv(envId, "/tmp");
   if (!env) return [];
   const ctx = BACKGROUND_CONTEXT;
   // 列 sessions 目录；Windows 上 daemon 跑 Git Bash 兼容 ls
@@ -128,8 +129,8 @@ export async function transferPiSession(
   targetCwd: string,
 ): Promise<{ ok: boolean; targetFile: string; bytes: number; error?: string }> {
   const ctx = BACKGROUND_CONTEXT;
-  const source = await execRegistry.buildForEnv(sourceEnvId, "~");
-  const target = await execRegistry.buildForEnv(targetEnvId, "~");
+  const source = await execRegistry.buildForEnv(sourceEnvId, "/tmp");
+  const target = await execRegistry.buildForEnv(targetEnvId, "/tmp");
   if (!source || !target) return { ok: false, targetFile: "", bytes: 0, error: "executor not available" };
 
   // 1. 源机读全文
