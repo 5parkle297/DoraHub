@@ -56,17 +56,18 @@ export async function listPiSessions(execRegistry: ExecRegistry, envId: string):
   const dirs = listHome.trim().split("\n").filter((d) => d.startsWith("--") && d.endsWith("--"));
   const out: PiSessionInfo[] = [];
   for (const dir of dirs.slice(0, 30)) {
-    // 每个目录里的 jsonl 文件 + mtime + size
-    const ls = await sh(env, `ls -lt --time-style=+%s ~/.pi/agent/sessions/${dir}/ 2>/dev/null | grep '.jsonl' | head -20`);
+    // 每个目录里的 jsonl 文件 + mtime + size——用 printf 结构化输出，不解析 ls 列
+    // （ls -l 的 owner/group 列数不稳，文件名还可能含空格）
+    const ls = await sh(env, `cd ~/.pi/agent/sessions/${dir} && for f in *.jsonl; do [ -f \"\$f\" ] && printf '%s\\t%s\\t%s\\n' \"\$f\" \"\$(stat -c %Y \"\$f\")\" \"\$(stat -c %s \"\$f\")\"; done | head -20`);
     if (!ls.trim()) continue;
     for (const line of ls.trim().split("\n").filter(Boolean)) {
-      // -rw-r--r-- 1 user 1234 1792136000 file.jsonl
-      const m = line.match(/\S+\s+\d+\s+\S+\s+(\d+)\s+(\d+)\s+(.+\.jsonl)\s*$/);
-      if (!m) continue;
-      const [, size, mtime, file] = m;
+      const [file, mtime, size] = line.split("\t");
+      if (!file?.endsWith(".jsonl")) continue;
       // 读头部摘要（session header + 首条 user 消息）
+      // 头 4KB 拿 session header；preview 用 grep 扫全文件取最后一条 user 消息行
       const head = await sh(env, `head -c 4096 ~/.pi/agent/sessions/${dir}/${file}`);
-      const preview = summarizeHead(head);
+      const userLine = await sh(env, `grep '"role":"user"' ~/.pi/agent/sessions/${dir}/${file} | tail -1 | head -c 3000`);
+      const preview = summarizeHead(userLine || head);
       const hdr = parseSessionHeader(head);
       out.push({
         envId,
@@ -102,7 +103,9 @@ function summarizeHead(head: string): string {
         const text = typeof c === "string" ? c
           : Array.isArray(c) ? c.filter((b: any) => b?.type === "text").map((b: any) => b.text ?? "").join(" ")
           : "";
-        return text.slice(0, 100).trim();
+        const t = text.trim();
+        // 跳过 pi 注入的包装消息（system wrapper / hook）
+        if (t && !t.startsWith("<")) return t.slice(0, 100);
       }
     } catch { continue; }
   }
