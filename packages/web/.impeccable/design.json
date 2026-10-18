@@ -1,0 +1,112 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-18T22:55:00+08:00",
+  "title": "Design System: DoraHub",
+  "extensions": {
+    "colorMeta": {
+      "paper-ground": { "role": "neutral", "displayName": "原稿纸", "canonical": "#f4f1e9" },
+      "paper-raised": { "role": "neutral", "displayName": "贴纸白", "canonical": "#ffffff" },
+      "paper-sunken": { "role": "neutral", "displayName": "网点纸", "canonical": "#ecebe3" },
+      "ink": { "role": "neutral", "displayName": "墨色", "canonical": "#1c1a17", "tonalRamp": ["#0d0c0a", "#1c1a17", "#3a362f", "#5f5a4e", "#8a8474", "#b5ae9c", "#dad5c6", "#f0ede3"] },
+      "vermilion": { "role": "primary", "displayName": "朱砂", "canonical": "#c2372c", "tonalRamp": ["#3d0e0a", "#7a1c15", "#a52a20", "#c2372c", "#d46056", "#e08a80", "#efb7b0", "#f9deda"] },
+      "seal-green": { "role": "secondary", "displayName": "封泥绿", "canonical": "#2e7d4f", "tonalRamp": ["#0c2818", "#1d5334", "#2e7d4f", "#4a9a6b", "#6cb98c", "#93d1ad", "#bce7cb", "#e2efe5"] },
+      "indigo-annotation": { "role": "secondary", "displayName": "靛蓝批注", "canonical": "#2c5f7c", "tonalRamp": ["#0b1e29", "#1a3f54", "#2c5f7c", "#487f9d", "#6fa0bc", "#94bcd3", "#b9d5e6", "#e3ecf2"] },
+      "amber-note": { "role": "secondary", "displayName": "琥珀便签", "canonical": "#b07d10", "tonalRamp": ["#382804", "#6f500a", "#b07d10", "#c99729", "#d4a72c", "#e3c058", "#f0d98c", "#f5ecd3"] }
+    },
+    "typographyMeta": {
+      "body": { "displayName": "正文", "purpose": "消息/设置正文，中文回退 Noto Sans SC" },
+      "label": { "displayName": "标签", "purpose": "角色标签/时间戳/分组计数，mono 大写" },
+      "code": { "displayName": "代码", "purpose": "代码块/diff/命令输出" }
+    },
+    "shadows": [
+      { "name": "sticker-1", "value": "1px 1px 0 rgba(28,26,23,0.08), 0 1px 3px rgba(28,26,23,0.05)", "purpose": "消息格/侧栏激活项微浮" },
+      { "name": "sticker-2", "value": "2px 2px 0 rgba(28,26,23,0.1), 0 4px 14px rgba(28,26,23,0.08)", "purpose": "composer/确认卡" },
+      { "name": "sticker-pop", "value": "3px 3px 0 rgba(28,26,23,0.12), 0 12px 40px rgba(28,26,23,0.18)", "purpose": "弹窗/下拉菜单" }
+    ],
+    "motion": [
+      { "name": "frame-close", "value": "0.22s ease-out", "purpose": "签名动作：流式完成时框缘闭合（dashed→solid→transparent）" },
+      { "name": "pulse", "value": "1.2s-1.6s infinite", "purpose": "运行中/等待的呼吸态" }
+    ],
+    "breakpoints": [
+      { "name": "cockpit", "value": "768px", "purpose": "以下手机驾驶舱单栏，以上桌面两栏" }
+    ]
+  },
+  "components": [
+    {
+      "name": "用户消息格",
+      "kind": "custom",
+      "refersTo": "frame-user-message",
+      "description": "实线墨框白面板——人写的，定了的。",
+      "html": "<div class=\"ds-msg-user\"><span class=\"ds-msg-label\">你</span><p>把 token 全部换成新世界的值，别动组件结构。</p></div>",
+      "css": ".ds-msg-user { background: #ffffff; border: 1.5px solid #1c1a17; border-radius: 4px; padding: 12px 16px; box-shadow: 1px 1px 0 rgba(28,26,23,0.08), 0 1px 3px rgba(28,26,23,0.05); max-width: 760px; } .ds-msg-user p { margin: 0; font-family: 'IBM Plex Sans', 'Noto Sans SC', sans-serif; font-size: 14.5px; line-height: 1.7; color: #1c1a17; } .ds-msg-label { display: block; font-family: 'IBM Plex Mono', monospace; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #a52a20; margin-bottom: 4px; }"
+    },
+    {
+      "name": "工具卡（完成态）",
+      "kind": "card",
+      "description": "细线闭框 + 状态戳「讫」——机器画完了的格。",
+      "html": "<div class=\"ds-tool\"><span class=\"ds-stamp\">讫</span><div class=\"ds-tool-head\"><span class=\"ds-tool-name\">bash</span><span class=\"ds-tool-detail\">$ hostname</span><span class=\"ds-tool-time\">3.2s</span></div><pre class=\"ds-tool-out\">cyq</pre></div>",
+      "css": ".ds-tool { position: relative; background: #ffffff; border: 1px solid rgba(28,26,23,0.35); border-radius: 4px; overflow: hidden; max-width: 760px; } .ds-tool-head { display: flex; align-items: center; gap: 8px; padding: 8px 12px; font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; } .ds-tool-name { color: #a52a20; font-weight: 600; } .ds-tool-detail { color: #645f53; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .ds-tool-time { color: #6d6959; font-size: 11px; } .ds-stamp { position: absolute; top: 7px; right: 10px; font-family: 'IBM Plex Mono', monospace; font-size: 10px; font-weight: 600; color: #2e7d4f; border: 1.5px solid currentColor; border-radius: 3px; padding: 1px 6px; transform: rotate(-3deg); } .ds-tool-out { margin: 0; padding: 12px; background: #ecebe3; border-top: 1px solid #d8d4c6; font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; color: #645f53; }"
+    },
+    {
+      "name": "确认卡",
+      "kind": "custom",
+      "refersTo": "frame-confirmation",
+      "description": "朱砂实线框——整屏唯一红框，等人拍板。",
+      "html": "<div class=\"ds-confirm\"><div class=\"ds-confirm-title\">等待确认</div><pre class=\"ds-confirm-cmd\">bash rm -rf dist && npm run build</pre><div class=\"ds-confirm-actions\"><button class=\"ds-btn\">拒绝</button><button class=\"ds-btn ds-btn-primary\">放行</button></div></div>",
+      "css": ".ds-confirm { background: #ffffff; border: 1.5px solid #c2372c; border-radius: 4px; padding: 12px 16px; box-shadow: 2px 2px 0 rgba(28,26,23,0.1), 0 4px 14px rgba(28,26,23,0.08); max-width: 640px; } .ds-confirm-title { color: #c2372c; font-weight: 650; font-size: 14.5px; font-family: 'IBM Plex Sans', 'Noto Sans SC', sans-serif; } .ds-confirm-cmd { background: #ecebe3; border-radius: 4px; padding: 8px 12px; font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; color: #1c1a17; white-space: pre-wrap; } .ds-confirm-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; } .ds-btn { background: #ffffff; color: #1c1a17; border: 1px solid rgba(28,26,23,0.35); border-radius: 4px; padding: 6px 14px; font-size: 14.5px; cursor: pointer; } .ds-btn-primary { background: #1c1a17; color: #f4f1e9; border-color: #1c1a17; font-weight: 600; } .ds-btn-primary:hover { background: #c2372c; border-color: #c2372c; }"
+    },
+    {
+      "name": "主按钮",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "墨底贴纸按钮，hover 转朱砂。",
+      "html": "<button class=\"ds-btn-primary\">＋ 新会话</button>",
+      "css": ".ds-btn-primary { background: #1c1a17; color: #f4f1e9; border: 1px solid #1c1a17; border-radius: 4px; padding: 6px 14px; font-size: 14.5px; font-weight: 600; font-family: 'IBM Plex Sans', 'Noto Sans SC', sans-serif; cursor: pointer; box-shadow: 1px 1px 0 rgba(28,26,23,0.08); transition: background 0.15s; } .ds-btn-primary:hover { background: #c2372c; border-color: #c2372c; } .ds-btn-primary:active { transform: translate(1px, 1px); box-shadow: none; } .ds-btn-primary:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(194,55,44,0.25); }"
+    },
+    {
+      "name": "关键词小签",
+      "kind": "chip",
+      "refersTo": "chip-keyword",
+      "description": "hairline 描边 mono 小签——原稿页边的索引标签。",
+      "html": "<span class=\"ds-chip\">token 重设计</span>",
+      "css": ".ds-chip { border: 1px solid #d8d4c6; border-radius: 4px; padding: 1px 7px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #645f53; background: transparent; }"
+    },
+    {
+      "name": "侧栏会话行（当前）",
+      "kind": "nav",
+      "description": "实线墨框当前格；运行中为虚线开框。",
+      "html": "<div class=\"ds-conv ds-conv-active\"><span class=\"ds-conv-name\">重设计 style.css token</span><span class=\"ds-conv-time\">14:32</span></div>",
+      "css": ".ds-conv { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 4px; cursor: pointer; border: 1.5px solid transparent; } .ds-conv:hover { background: #eceae0; } .ds-conv-active { background: #ffffff; border-color: #1c1a17; box-shadow: 1px 1px 0 rgba(28,26,23,0.08); } .ds-conv-name { font-weight: 600; font-size: 14.5px; color: #1c1a17; flex: 1; font-family: 'IBM Plex Sans', 'Noto Sans SC', sans-serif; } .ds-conv-time { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #6d6959; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "原稿格工作台（The Manuscript-Frame Workbench）",
+    "overview": "DoraHub 的界面是漫画原稿的工作台：页面底是带浅蓝格纹的原稿纸，每条消息、每次工具调用都是原稿上的一格。框承担全部状态语言——框即语义：实线墨框是人写的或待人拍板的东西；虚线开框是还在进行的事；细线闭框是机器已完成的事；无框是 agent 的叙述；网点底是机器的产出。任务完成的瞬间，虚线闭合为实线——这一格画完了。字体彻底反装饰：工作马 IBM Plex，唯一允许的笔触是朱砂红，只出现在需要人出手的地方。",
+    "keyCharacteristics": [
+      "框即语义：solid=定了，dashed=进行中，细线=机器完成，无框=叙述，网点底=机器输出",
+      "原稿纸底 + 微蓝格纹",
+      "贴纸感阴影（offset 右下 + 极轻柔化）",
+      "朱砂红配额制：责任色不作装饰",
+      "工作马字体纪律：mono 只给代码/标签/时间戳",
+      "4px 微圆角：漫画格是方的"
+    ],
+    "rules": [
+      { "name": "The 框即语义 Rule", "body": "边框样式必须如实反映状态：solid=已定，dashed=进行中。不允许装饰性边框。", "section": "colors" },
+      { "name": "The 朱砂配额 Rule", "body": "朱砂红只出现在需要人拍板或出错的场合，单屏占比 <5%。", "section": "colors" },
+      { "name": "The 工作马 Rule", "body": "不引入装饰性字体。字重只有 400/600/650/700 四档。", "section": "typography" },
+      { "name": "The 贴纸 Rule", "body": "阴影 offset 方向恒为右下（光源左上）。浮起=贴纸，不追求玻璃感。", "section": "elevation" }
+    ],
+    "dos": [
+      "Do 用边框样式表达状态（solid/dashed 是状态语言）",
+      "Do 每个工具卡完成时带状态戳（讫/误/阻）",
+      "Do 保持朱砂红的稀缺性",
+      "Do 深色模式全部 token 自动跟随 prefers-color-scheme"
+    ],
+    "donts": [
+      "Don't 引入 UI 组件库或装饰性字体",
+      "Don't 用暖纸+terracotta 旧世界",
+      "Don't 给卡片加彩色左边条（side-tab 反模式）",
+      "Don't 在手机上把输入框 font-size 降到 16px 以下"
+    ]
+  }
+}

@@ -10,6 +10,13 @@ const STATUS_ICON: Record<string, string> = {
   blocked: "⊘",
 };
 
+/** 状态戳：完成/错误/拦截的工具卡右上角单色小戳（框语法：画完了的格盖戳） */
+const STATUS_STAMP: Record<string, string> = {
+  done: "讫",
+  error: "误",
+  blocked: "阻",
+};
+
 /** edit 工具 → 前后内容 diff（行级 LCS，规模小够用）。 */
 function DiffView({ oldText, newText }: { oldText: string; newText: string }) {
   const rows = useMemo(() => diffLines(oldText.split("\n"), newText.split("\n")), [oldText, newText]);
@@ -84,6 +91,9 @@ export function ToolCard({ card }: { card: ToolCardState }) {
 
   return (
     <div className={`tool-card tool-${card.status}`}>
+      {STATUS_STAMP[card.status] && (
+        <span className={`tool-stamp ${card.status}`}>{STATUS_STAMP[card.status]}</span>
+      )}
       <button className="tool-head" onClick={() => setOpen(!open)}>
         <span className={`tool-icon tool-icon-${card.status}`}>{STATUS_ICON[card.status] ?? "?"}</span>
         <span className="tool-name">{title}</span>

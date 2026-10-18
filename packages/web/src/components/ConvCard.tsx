@@ -31,7 +31,7 @@ export function ConvCard({
 
   return (
     <div
-      className={`conv-item ${active ? "active" : ""}`}
+      className={`conv-item ${active ? "active" : ""} ${conv.status === "running" ? "conv-running" : ""}`}
       style={style}
       onClick={() => navigate({ page: "conversation", id: conv.id })}
     >

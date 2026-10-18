@@ -16,3 +16,9 @@ dev-server.sh
 ts.json
 .dev-ssh/
 scripts/__pycache__/
+
+# impeccable 工作产物：截图评审与临时 mock 不入库，契约/设计系统入库
+packages/web/.impeccable/review/
+packages/web/.impeccable/mocks/
+packages/web/.impeccable/questions/
+packages/web/.impeccable/decision-payload.json
