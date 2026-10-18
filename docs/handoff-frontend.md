@@ -1,13 +1,15 @@
 # DoraHub 交接文档 v3（给下一个 UI 重设计会话）
 
-> 写于 2026-10-18，基于 v2 增量更新：**本次任务不是加功能，是用 Impeccable 方法论重设计全部 UI**。
+> 写于 2026-10-18。v3 会话已完成：**UI 重设计（原稿格工作台）已上线**。本文档转为常规交接；§0 保留方法论记录。
 > v2 的环境/API/坑清单仍有效，本文已合并 10-18 的变更；与 v2 冲突处以本文为准。
 > **历史成果速览**：M0-M4 全部上线——暖纸浅色设计系统、自动命名、三执行机远程执行（hub/workpc/laptop）、跨机迁移、pi 会话管理中心、/model 选择器、**桌面两栏 + 手机驾驶舱双模式（10-18）**。线上 https://hub.tail242752.ts.net 。
 > **本文档结构**：§0 本次任务（必读）→ §1 怎么跑 → §2 现状 → §3 API → §4 代码地图 → §5 设计现状与约束 → §6 坑清单 → §7 验收 → §8 发版 → §9 自由度。
 
-## 0. 本次任务：Impeccable 驱动的 UI 重设计（唯一 P0）
+## 0. 本次任务：Impeccable 驱动的 UI 重设计（✅ 已完成 2026-10-18）
 
-**用户指令（2026-10-18 原话精神）**：这一版功能不再看；下一步用 AI 重新设计 UI，方法论来自 [pbakaus/impeccable](https://github.com/pbakaus/impeccable)。
+**结果**：新视觉世界「原稿格工作台」——框即语义（实线=人写/待拍板、虚线=进行中、细线=机器完成、无框=叙述、网点底=机器输出、朱砂=等人出手）× 工作马字体（IBM Plex Sans/Mono + Noto Sans SC 自托管）。用户 steer 决定：漫画框语法 × 类别标准的字体纪律。产物：PRODUCT.md / DESIGN.md / surface brief（均在 packages/web/）。
+
+**原任务描述**：方法论来自 [pbakaus/impeccable](https://github.com/pbakaus/impeccable)。
 
 ### Impeccable 是什么、已装在哪
 
@@ -209,6 +211,9 @@ web/src/
 18. **CDP 手机仿真**：`Browser.setWindowBounds` 在 Windows 不改 viewport（假象）；必须 `Emulation.setDeviceMetricsOverride` + 干净导航。且 CDP 返回结构是 `result.result.value` 三层
 19. hub.py 连接用公网 IP（hub.env 的 DORAHUB_HUB_PUBLIC_IP），不是私网 IP 也不是 Tailscale 域名
 20. GitHub 直连时好时坏：git push / release 下载失败先等几分钟重试；release 走代理 `curl -x http://127.0.0.1:10808` 可下
+21. **vite dev 多实例残留**：上个会话遗留的 vite 占着 5173，新 vite 漂移到 5174+，旧实例吐旧代码造成"改了不生效"假象；dev 前查 `netstat -ano | grep 517` 清场
+22. **vite dev 的 CSS 是 style 标签注入 + HMR 追加不替换**：多次热更新后 computed style 可能钉在旧值；验证样式结论一律用 `vite preview`（生产 build）
+23. **路由是 `#/conversations/:id`**（不是 `#/c/:id`）；手动注入 class 验证 React 渲染树外的样式时 computed bg 会误报 transparent
 
 ## 7. 验收基线（重设计改完必须仍然全过）
 
