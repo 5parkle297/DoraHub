@@ -15,8 +15,15 @@ laptop(PWA) ─┘   serve/TLS   pi-durable + SQLite
 | M1 | ✅ | pi-durable 跑通（zjl provider / grok-4.7），CLI 试玩，SIGKILL 崩溃恢复演练 |
 | M2 | ✅ | hub 服务端：HTTP API + WS 事件扇出 + guard 确认流 + systemd 单元；15/15 集成测试 |
 | M3 | ✅ | PWA：双设备同会话实时同步（S1）、steer（S2）、手机放行/拒绝（S3）、断线重连（S4 UI 侧） |
-| M4 | 🔶 代码就绪 | pi-env 集成（V-01：官方 RemoteExecutionEnv 替代自研 exec-agent）；待 Tailscale SSH 部署后验证 |
-| M0/M5 | ⏳ | 网络层部署（需手动）/ 加分项 |
+| M4 | ✅ | 执行机远程执行上线：hub 出站 SSH → workpc/laptop（Git Bash + PATH 注入），跨机工作区迁移，`/api/executors` 缓存探测 |
+| M5 | ⏳ | 加分项：usage 面板、compaction 标记、fork 选点、PWA 推送等（见 handoff §5） |
+
+## 重大改动记录（按会话分界）
+
+| 日期 | 会话 | 重大改动 |
+|---|---|---|
+| 10-17 | pi 会话管理中心 | 会话软删除；跨机工作区迁移（harvest→中转搬运→校准提示）；pi CLI 会话扫描/元数据生成/导入 durable/删除/跨机搬运；/api/executors 秒回（缓存+后台探测）；执行机离线灰化 |
+| 10-18 | 桌面两栏 + UI 收敛 | 桌面 ≥769px 侧栏常驻两栏布局（当前会话高亮、空态引导）；手机驾驶舱模式（无管理功能）；设置弹窗四页签（执行机/渠道模型/pi 会话/关于）；会话页 header 收敛（模型标签直达切换、⋯ 菜单）；pi 会话区从列表页移入设置 |
 
 ## 快速开始（workpc 本地开发）
 
