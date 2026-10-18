@@ -6,7 +6,7 @@
  */
 import { useState } from "react";
 import { api } from "../api.ts";
-import { envLabel } from "../pages/Conversations.tsx";
+import { envLabel } from "./Sidebar.tsx";
 import { Modal } from "./Modal.tsx";
 import type { ExecutorInfo } from "@dorahub/shared";
 

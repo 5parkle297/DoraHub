@@ -164,6 +164,10 @@ body {
 .brand-dot { color: var(--accent); }
 
 .conv-list { flex: 1; overflow-y: auto; padding: 0 var(--sp-4) var(--sp-6); display: flex; flex-direction: column; gap: var(--sp-4); }
+@media (max-width: 768px) {
+  .page-list { max-width: none; }
+  .conv-list { padding: 0 var(--sp-3) var(--sp-5); }
+}
 
 /* 项目分组头 */
 .group-label {
@@ -586,6 +590,124 @@ body {
 @media (min-width: 769px) {
   .app-row { display: flex; }
 }
+
+/* ============================================================
+   桌面两栏布局（UI 收敛 2026-10-18）：侧栏常驻 + 主区
+   ============================================================ */
+.app-row { height: 100%; min-height: 0; }
+.sidebar {
+  width: 300px; flex: none;
+  display: flex; flex-direction: column;
+  border-right: 1px solid var(--border);
+  background: var(--bg);
+  min-height: 0;
+}
+.sidebar .list-header { padding: var(--sp-3) var(--sp-3) var(--sp-2); gap: var(--sp-2); }
+.sidebar .conv-list { padding: 0 var(--sp-2) var(--sp-4); gap: var(--sp-3); }
+.sidebar .conv-item { padding: var(--sp-2) var(--sp-3); }
+.main-col { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.main-col .page-conv { height: 100%; }
+
+.brand-btn {
+  background: none; border: none; padding: 0; cursor: pointer;
+  display: flex; align-items: center;
+}
+.brand-btn h1 { font-size: var(--fs-lg); font-weight: 700; margin: 0; letter-spacing: -0.02em; }
+.header-btns { display: flex; align-items: center; gap: 6px; }
+.icon-btn { font-size: var(--fs-lg); padding: 6px 9px; }
+.btn.menu-open { background: var(--bg-hover); color: var(--text); }
+
+/* 侧栏当前会话高亮 */
+.conv-item.active {
+  background: var(--accent-soft);
+  box-shadow: none;
+}
+.conv-item.active .conv-name { color: var(--accent-text); }
+
+/* ---- ⋯ 菜单（portal） ---- */
+.menu-mask { position: fixed; inset: 0; z-index: 40; }
+.conv-menu {
+  position: fixed; top: 48px; right: 12px; z-index: 41;
+  background: var(--bg-raised); border-radius: var(--r-md);
+  box-shadow: var(--shadow-pop);
+  padding: 6px;
+  min-width: 200px;
+  display: flex; flex-direction: column;
+}
+.menu-item {
+  background: none; border: none; text-align: left; cursor: pointer;
+  padding: 9px 12px; border-radius: var(--r-sm);
+  font-size: var(--fs-md); font-family: var(--sans); color: var(--text);
+}
+.menu-item:hover { background: var(--bg-hover); }
+.menu-item.danger { color: var(--red); }
+.menu-item.danger:hover { background: var(--red-soft); }
+
+/* ---- 设置弹窗 ---- */
+.settings-tabs { display: flex; gap: 4px; margin-bottom: var(--sp-3); border-bottom: 1px solid var(--border); }
+.settings-tab {
+  background: none; border: none; cursor: pointer;
+  padding: 7px 12px; border-radius: var(--r-sm) var(--r-sm) 0 0;
+  font-size: var(--fs-sm); font-family: var(--sans); color: var(--text-dim);
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+}
+.settings-tab:hover { color: var(--text); }
+.settings-tab.on { color: var(--accent-text); font-weight: 600; border-bottom-color: var(--accent); }
+.settings-body { display: flex; flex-direction: column; gap: var(--sp-3); }
+.settings-hint { color: var(--text-faint); font-size: var(--fs-sm); line-height: 1.55; }
+
+/* 执行机状态表 */
+.exec-table { display: flex; flex-direction: column; }
+.exec-row {
+  display: flex; align-items: center; gap: var(--sp-2);
+  padding: 10px 4px; border-bottom: 1px solid var(--border);
+}
+.exec-row:last-child { border-bottom: none; }
+.exec-dot {
+  width: 8px; height: 8px; border-radius: 50%; flex: none;
+  background: var(--text-faint);
+}
+.exec-dot.on { background: var(--green); box-shadow: 0 0 6px var(--green); }
+.exec-name { font-weight: 600; flex: none; min-width: 90px; }
+.exec-host { color: var(--text-faint); font-size: var(--fs-sm); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); }
+.exec-status { font-size: var(--fs-sm); color: var(--green); flex: none; }
+.exec-status.off { color: var(--text-faint); }
+
+/* 渠道块 */
+.channel-block { display: flex; flex-direction: column; gap: 4px; }
+.channel-name { font-weight: 650; font-size: var(--fs-md); }
+.channel-id { color: var(--text-faint); font-weight: 400; font-size: var(--fs-sm); }
+.channel-model {
+  display: flex; align-items: center; gap: var(--sp-2);
+  padding: 5px 8px; background: var(--bg-sunken); border-radius: var(--r-sm);
+}
+
+/* 关于 */
+.about-grid { display: grid; grid-template-columns: 84px 1fr; gap: 6px var(--sp-3); font-size: var(--fs-sm); }
+.about-key { color: var(--text-faint); }
+
+/* ---- 桌面空态 ---- */
+.welcome-pane {
+  flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: var(--sp-2); padding: var(--sp-6);
+}
+.welcome-logo { font-size: 32px; font-weight: 700; letter-spacing: -0.02em; }
+.welcome-sub { color: var(--text-dim); font-size: var(--fs-md); }
+.welcome-hint { color: var(--text-faint); font-size: var(--fs-sm); margin-top: var(--sp-3); }
+.welcome-recent {
+  margin-top: var(--sp-5); width: min(420px, 90%);
+  display: flex; flex-direction: column; gap: 6px;
+}
+.welcome-recent-label { color: var(--text-faint); font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.06em; }
+.welcome-conv {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2);
+  background: var(--bg-raised); border-radius: var(--r-md);
+  padding: 10px 14px; cursor: pointer; border: none; text-align: left;
+  font-family: var(--sans); box-shadow: var(--shadow-1);
+}
+.welcome-conv:hover { box-shadow: var(--shadow-2); }
+.welcome-conv-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+.welcome-conv-env { color: var(--text-faint); font-size: var(--fs-xs); flex: none; }
 
 /* pi 会话操作组 */
 .pi-actions { margin-left: auto; display: flex; gap: 4px; }

@@ -1,9 +1,6 @@
 /** 极简路由（无 react-router 依赖，hash 路由够用）。 */
 import { useEffect, useState } from "react";
-
-export type Route =
-  | { page: "conversations" }
-  | { page: "conversation"; id: string };
+import type { Route } from "./route.ts";
 
 function parse(): Route {
   const hash = location.hash.replace(/^#/, "");
@@ -25,4 +22,16 @@ export function useRoute(): Route {
 export function navigate(route: Route) {
   location.hash =
     route.page === "conversation" ? `/conversations/${encodeURIComponent(route.id)}` : "/conversations";
+}
+
+/** 是否桌面宽屏（≥769px，实时响应）。两栏/单栏的唯一切换依据。 */
+export function useIsWide(): boolean {
+  const [wide, setWide] = useState(() => matchMedia("(min-width: 769px)").matches);
+  useEffect(() => {
+    const mq = matchMedia("(min-width: 769px)");
+    const on = () => setWide(mq.matches);
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, []);
+  return wide;
 }

@@ -39,11 +39,17 @@ function modelRef(provider: string, modelId: string): string {
 export function ModelPicker({
   convId,
   current,
+  forceOpen,
+  onClose,
   onConfigured,
 }: {
   convId: string;
   /** 当前 "provider:modelId" + thinkingLevel（从会话 agent 快照来） */
   current: { provider?: string; modelId?: string; thinkingLevel?: string | null };
+  /** 受控模式：true = 始终渲染弹窗（父组件控制开闭，如 header 标签点击） */
+  forceOpen?: boolean;
+  /** 受控模式的关闭回调 */
+  onClose?: () => void;
   onConfigured?: () => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -98,7 +104,7 @@ export function ModelPicker({
         model: { provider, modelId },
         ...(thinking ? { thinkingLevel: thinking } : {}),
       });
-      setOpen(false);
+      close();
       onConfigured?.();
     } catch (e: any) {
       setMsg(e.message);
@@ -107,16 +113,14 @@ export function ModelPicker({
     }
   }
 
-  if (!open) {
-    return (
-      <button className="btn ghost" title="模型（/model）" onClick={() => setOpen(true)}>
-        ⚙
-      </button>
-    );
+  if (!open && !forceOpen) {
+    return null;
   }
 
+  const close = () => (onClose ? onClose() : setOpen(false));
+
   return (
-    <Modal onClose={() => setOpen(false)}>
+    <Modal onClose={close}>
       <h3>模型</h3>
 
       <input
@@ -181,7 +185,7 @@ export function ModelPicker({
       {msg && <div className="picker-msg">{msg}</div>}
 
       <div className="modal-actions">
-        <button className="btn" onClick={() => setOpen(false)}>取消</button>
+        <button className="btn" onClick={close}>取消</button>
         <button className="btn primary" disabled={!sel || busy} onClick={apply}>
           {busy ? "切换中…" : "应用"}
         </button>

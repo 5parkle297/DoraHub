@@ -1,8 +1,10 @@
-/** 会话页（06 §2 信息架构）：snapshot → 事件 reducer → 消息流渲染。 */
+/** 会话页（06 §2 信息架构 + 2026-10-18 header 收敛）：snapshot → 事件 reducer → 消息流渲染。
+ * header：桌面`标题 [🖥env] [model] ●运行 [⏹] [⋯]`；手机`[←] 标题 ●运行 [⋯]`。 */
 import { useEffect, useReducer, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { api } from "../api.ts";
 import { wsClient } from "../ws.ts";
-import { navigate } from "../route.ts";
+import { navigate, useIsWide } from "../route.ts";
 import { initialConvState, applySnapshot, applyEvents, type ConvState } from "../state/conv.ts";
 import { MessageBubble } from "../components/MessageBubble.tsx";
 import { Composer } from "../components/Composer.tsx";
@@ -31,6 +33,9 @@ export function ConversationPage({ id }: { id: string }) {
   const [executors, setExecutors] = useState<ExecutorInfo[]>([]);
   const [migrationDraft, setMigrationDraft] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
+  const wide = useIsWide();
+  const [modelOpen, setModelOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const refreshExecutors = () => api.executors().then(setExecutors).catch(() => {});
   // 首次：HTTP snapshot；随后 WS attach
@@ -154,38 +159,63 @@ export function ConversationPage({ id }: { id: string }) {
   return (
     <div className="page-conv">
       <header className="conv-header">
-        <button className="btn ghost" onClick={() => navigate({ page: "conversations" })}>←</button>
+        {!wide && (
+          <button className="btn ghost" onClick={() => navigate({ page: "conversations" })}>←</button>
+        )}
         <div className="conv-title">
           <span className="conv-title-name">{convName}</span>
-          <EnvSwitcher
-            convId={id}
-            current={envId}
-            currentCwd={convCwd}
-            executors={executors}
-            onSwitched={(v) => setEnvId(v)}
-            onOpen={refreshExecutors}
-            onMigrationNotice={(notice) => setMigrationDraft(notice)}
-          />
-          {agentInfo.modelId && (
-            <button className="model-tag" title="点击切换模型（/model）">
-              {agentInfo.provider}/{agentInfo.modelId}
-            </button>
+          {wide && (
+            <>
+              <EnvSwitcher
+                convId={id}
+                current={envId}
+                currentCwd={convCwd}
+                executors={executors}
+                onSwitched={(v) => setEnvId(v)}
+                onOpen={refreshExecutors}
+                onMigrationNotice={(notice) => setMigrationDraft(notice)}
+              />
+              {agentInfo.modelId && (
+                <button
+                  className="model-tag"
+                  title="切换模型（/model）"
+                  onClick={() => setModelOpen(true)}
+                >
+                  {agentInfo.provider}/{agentInfo.modelId}
+                </button>
+              )}
+            </>
           )}
           {state.status === "running" && <span className="badge-running">▶ 运行中</span>}
         </div>
         <div className="conv-actions">
-          <ModelPicker
-            convId={id}
-            current={agentInfo}
-            onConfigured={() => setAgentTick((n) => n + 1)}
-          />
-          <button className="btn ghost" title="中止当前运行" onClick={() => api.abort(id).catch((e) => setError(e.message))}>
-            ⏹
-          </button>
+          {wide && state.status === "running" && (
+            <button
+              className="btn ghost"
+              title="中止当前运行"
+              onClick={() => api.abort(id).catch((e) => setError(e.message))}
+            >
+              ⏹
+            </button>
+          )}
           <button
-            className="btn ghost"
-            title="在最新消息处分叉"
-            onClick={async () => {
+            className={`btn ghost ${menuOpen ? "menu-open" : ""}`}
+            title="更多操作"
+            onClick={() => setMenuOpen((v) => !v)}
+          >
+            ⋯
+          </button>
+        </div>
+        {menuOpen && (
+          <ConvMenu
+            wide={wide}
+            running={state.status === "running"}
+            modelId={agentInfo.modelId ?? ""}
+            onClose={() => setMenuOpen(false)}
+            onSwitchModel={() => { setMenuOpen(false); setModelOpen(true); }}
+            onAbort={() => { setMenuOpen(false); api.abort(id).catch((e) => setError(e.message)); }}
+            onFork={async () => {
+              setMenuOpen(false);
               try {
                 const { id: fid } = await api.fork(id);
                 navigate({ page: "conversation", id: fid });
@@ -193,11 +223,19 @@ export function ConversationPage({ id }: { id: string }) {
                 setError(e.message);
               }
             }}
-          >
-            ⑂
-          </button>
-        </div>
+          />
+        )}
       </header>
+
+      {modelOpen && (
+        <ModelPicker
+          convId={id}
+          current={agentInfo}
+          forceOpen
+          onConfigured={() => setAgentTick((n) => n + 1)}
+          onClose={() => setModelOpen(false)}
+        />
+      )}
 
       {error && <div className="error-banner" onClick={() => setError("")}>{error} ✕</div>}
 
@@ -244,5 +282,50 @@ export function ConversationPage({ id }: { id: string }) {
         }}
       />
     </div>
+  );
+}
+
+/** header ⋯ 下拉菜单（portal 到 body——conv-header 有 backdrop-filter，
+ * 不 portal 会被钉在 header 高度里，坑清单 #1）。 */
+function ConvMenu({
+  wide,
+  running,
+  modelId,
+  onClose,
+  onSwitchModel,
+  onAbort,
+  onFork,
+}: {
+  wide: boolean;
+  running: boolean;
+  modelId: string;
+  onClose: () => void;
+  onSwitchModel: () => void;
+  onAbort: () => void;
+  onFork: () => void;
+}) {
+  return createPortal(
+    <>
+      <div className="menu-mask" onClick={onClose} />
+      <div className="conv-menu">
+        {!wide && (
+          <>
+            {modelId && (
+              <button className="menu-item" onClick={onSwitchModel}>
+                ⚙ 切换模型{modelId ? `（当前 ${modelId}）` : ""}
+              </button>
+            )}
+            {running && (
+              <button className="menu-item danger" onClick={onAbort}>⏹ 中止运行</button>
+            )}
+          </>
+        )}
+        <button className="menu-item" onClick={onFork}>⑂ 在最新消息处分叉</button>
+        {!wide && (
+          <button className="menu-item" onClick={onClose}>返回列表</button>
+        )}
+      </div>
+    </>,
+    document.body,
   );
 }

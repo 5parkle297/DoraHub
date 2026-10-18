@@ -26,7 +26,7 @@ interface PiSession {
   metaReady: boolean;
 }
 
-export function PiSessionsSection({ executors }: { executors: ExecutorInfo[] }) {
+export function PiSessionsSection({ executors, onOpen }: { executors: ExecutorInfo[]; onOpen?: () => void }) {
   const [sessions, setSessions] = useState<PiSession[]>([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
@@ -101,8 +101,8 @@ export function PiSessionsSection({ executors }: { executors: ExecutorInfo[] }) 
 
   return (
     <div className="pi-sessions">
-      <button className="pi-toggle" onClick={() => setOpen(!open)}>
-        <span>⌨ 本机 pi 会话</span>
+      <button className="pi-toggle" onClick={() => { setOpen(!open); if (!open) onOpen?.(); }}>
+        <span>⌨ 电脑上的 pi CLI 会话</span>
         <span className="pi-count">{open ? "▾" : "▸"}</span>
       </button>
 
