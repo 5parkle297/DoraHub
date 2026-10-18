@@ -49,7 +49,9 @@ typography:
     fontSize: "32px"
     fontWeight: 700
 rounded:
-  frame: "4px"
+  xl: "14px"
+  md: "10px"
+  sm: "6px"
   stamp: "3px"
   scrollbar: "2px"
 spacing:
@@ -106,7 +108,7 @@ DoraHub 的界面是漫画原稿的工作台：页面底是带浅蓝格纹的原
 - 贴纸感阴影：offset 硬边 + 极轻柔化，浮层像贴在原稿上的白纸
 - 朱砂红配额制：只给"等人拍板"的状态，绝不作装饰
 - 工作马字体纪律：mono 承担全部标签/时间戳/代码，sans 承担正文
-- 4px 微圆角：漫画格是方的，圆角只防锯齿
+- 圆角阶梯三档（14/10/6px）：大而柔、小而锐，框语义不变（v3.1 迭代）
 
 ## Colors
 
@@ -119,16 +121,7 @@ DoraHub 的界面是漫画原稿的工作台：页面底是带浅蓝格纹的原
 
 ### Secondary
 
-- **靛蓝批注**（#2c5f7c）：机器信息色——执行机徽章、链接、steer 指示、diff hunk。像原稿上铅笔写的旁注。
-- **封泥绿**（#2e7d4f）：完成态——工具状态戳「讫」、运行徽章、在线状态。
-- **琥珀便签**（#b07d10）：警示/等待——运行中、迁移提示、渠道重试。
-
-### Neutral
-
-- **原稿纸**（#f4f1e9）：页面底色，带浅蓝格纹。
-- **贴纸白**（#ffffff）：浮起面板/消息格/弹窗——贴在原稿上的白纸。
-- **网点纸**（#ecebe3）：机器输出区（代码块、diff、工具输出）的底。
-- **墨色**（#1c1a17）：正文与框线。深色模式下墨色反转近白（#e8e4d8）。
+- **靛蓝批注**（#2c5f7c）：机器在工作色——agent 标签、流式虚线框、运行中工具卡/侧栏行、运行徽章、光标。朱砂=人的责任，靛蓝=机器的活动，完美对称。
 - **次墨**（#645f53）/ **淡墨**（#6d6959）：次要/占位文本，全部底色上对比度 ≥4.5:1。
 
 ### Named Rules
@@ -172,7 +165,7 @@ DoraHub 的界面是漫画原稿的工作台：页面底是带浅蓝格纹的原
 ### Shadow Vocabulary
 
 - **shadow-1**（`1px 1px 0 rgba(28,26,23,.08), 0 1px 3px rgba(28,26,23,.05)`）：消息格、侧栏激活项的微浮。
-- **shadow-2**（`2px 2px 0 rgba(28,26,23,.1), 0 4px 14px rgba(28,26,23,.08)`）：composer、确认卡。
+- **shadow-2**（`2px 4px 12px rgba(28,26,23,.09), 0 2px 6px rgba(28,26,23,.06)`）：composer、确认卡。
 - **shadow-pop**（`3px 3px 0 rgba(28,26,23,.12), 0 12px 40px rgba(28,26,23,.18)`）：弹窗、下拉菜单。
 
 ### Named Rules
@@ -181,10 +174,9 @@ DoraHub 的界面是漫画原稿的工作台：页面底是带浅蓝格纹的原
 
 ## Shapes
 
-- 圆角统一 4px（--frame-r）：漫画格是方的，圆角只防锯齿。
+- 圆角阶梯：14/10/6px（大/中/小）+ 状态戳 3px + 滚动条 2px。
 - 框线宽度两档：1px（细线闭框/hairline）与 1.5px（实线墨框/虚线开框）。
 - 状态戳：3px 圆角小方戳，-3° 旋转，像盖章。
-- 无 border-radius 递增体系（没有 8/12/16/20 阶梯）——这个世界不需要。
 
 ## Components
 
@@ -192,7 +184,7 @@ DoraHub 的界面是漫画原稿的工作台：页面底是带浅蓝格纹的原
 
 - **用户消息**：实线墨框（1.5px solid ink）+ 贴纸白底 + shadow-1，Plex Mono "你" 标签朱砂色。
 - **Agent 叙述**：无框，直接上纸。
-- **Agent 流式**：虚线开框（1.5px dashed ink-soft），完成瞬间 `frame-close` 动画（dashed→transparent 0.22s）——签名动作"框缘闭合"。
+- **Agent 流式**：虚线开框（1.5px dashed 靛蓝），完成瞬间 `frame-close` 动画（dashed→transparent 0.22s）——签名动作"框缘闭合"。
 - **思考过程**：细线闭框可折叠，Plex Mono 灰字。
 
 ### 工具卡
@@ -221,7 +213,7 @@ DoraHub 的界面是漫画原稿的工作台：页面底是带浅蓝格纹的原
 
 ### 弹窗
 
-- 1.5px 墨线框 + shadow-pop + 4px 圆角，全部 portal 到 body（backdrop-filter containing block 坑）。
+- 1.5px 墨线框 + shadow-pop + 14px 圆角，全部 portal 到 body（backdrop-filter containing block 坑）。
 - 设置四页签：底边 2px 指示线，激活页签朱砂色。
 
 ## Do's and Don'ts
