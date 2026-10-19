@@ -1,42 +1,41 @@
-# DoraHub 交接文档 v3（给下一个 UI 重设计会话）
+# DoraHub 交接文档 v4（给下一个会话：laptop 体验修复 + 用户新报问题）
 
-> 写于 2026-10-18。v3 会话已完成：**UI 重设计（原稿格工作台）已上线**。本文档转为常规交接；§0 保留方法论记录。
-> v2 的环境/API/坑清单仍有效，本文已合并 10-18 的变更；与 v2 冲突处以本文为准。
-> **历史成果速览**：M0-M4 全部上线——暖纸浅色设计系统、自动命名、三执行机远程执行（hub/workpc/laptop）、跨机迁移、pi 会话管理中心、/model 选择器、**桌面两栏 + 手机驾驶舱双模式（10-18）**。线上 https://hub.tail242752.ts.net 。
-> **本文档结构**：§0 本次任务（必读）→ §1 怎么跑 → §2 现状 → §3 API → §4 代码地图 → §5 设计现状与约束 → §6 坑清单 → §7 验收 → §8 发版 → §9 自由度。
+> 写于 2026-10-19。v3 会话已完成：UI 重设计（原稿格工作台，现 v3.2 蓝色版）。本文档转为常规交接，§0 永远是"当前会话任务"。
+> 历史版本（v2/v3 全文）见 git 历史。
+> **历史成果速览**：M0-M4 上线——三执行机远程执行、跨机迁移、pi 会话管理中心、/model 选择器、桌面两栏+手机驾驶舱双模式、**视觉系统 v3「原稿格工作台」（10-18 重设计会话，impeccable 全流程）**。线上 https://hub.tail242752.ts.net 。
+> **本文档结构**：§0 本次任务（必读）→ §1 怎么跑 → §2 现状 → §3 API → §4 代码地图 → §5 设计约束 → §6 坑清单（23 条）→ §7 验收 → §8 发版 → §9 自由度。中长期项在 docs/roadmap.md。
 
-## 0. 本次任务：Impeccable 驱动的 UI 重设计（✅ 已完成 2026-10-18）
+## 0. 本次任务：修 laptop 侧体验问题（P0 #1 已诊断）+ 用户报的新问题清单
 
-**结果**：新视觉世界「原稿格工作台」——框即语义（实线=人写/待拍板、虚线=进行中、细线=机器完成、无框=叙述、网点底=机器输出、朱砂=等人出手）× 工作马字体（IBM Plex Sans/Mono + Noto Sans SC 自托管）。用户 steer 决定：漫画框语法 × 类别标准的字体纪律。产物：PRODUCT.md / DESIGN.md / surface brief（均在 packages/web/）。
+**背景**：UI 重设计已完成上线（v3.2 蓝色版 + 新 logo，sw CACHE v6）。用户 10-19 在 laptop 上实际使用时发现一批问题。P0 #1 我已用线上数据诊断完，剩下的是用户口述待下个会话逐条过。
 
-**原任务描述**：方法论来自 [pbakaus/impeccable](https://github.com/pbakaus/impeccable)。
+### P0-1【已诊断，直接按结论修】laptop 侧栏看到"很多新会话"且 pi 扫描扫不到本机的
 
-### Impeccable 是什么、已装在哪
+**用户报告**：在 laptop 上打开网站，左侧列表出来很多"新会话"；设置里 pi 会话扫出来的也是云端/workpc 的，不是 laptop 自己的。
 
-- 一个设计 skill（24 命令 + 59 条确定性 detector 规则 + 浏览器实时迭代），专治“AI 味 UI”
-- 仓库已 clone 到 `D:/hobby/impeccable`（浅 clone，main）
-- **skill 已注册到 pi**：`~/.pi/agent/settings.json` 的 `skills` 数组指向 `D:/hobby/impeccable/.pi/skills/impeccable`（新会话里直接可 `/impeccable ...` 或按 skill 描述自动路由）
-- **engine 二进制已就位**：`~/.impeccable/bin/0.1.15/impeccable.exe`（v4.6.0，Windows x64；是 GitHub release 下载的，源码在 repo 的 crates/ 但不用本地编译）
-- 实测可用：`impeccable.cmd context --target packages/web/src` 正常输出；`detect --json packages/web/src/style.css` 已拽出 3 个 side-tab anti-pattern
-- 调用方式（Git Bash）：`/d/hobby/impeccable/.pi/skills/impeccable/scripts/impeccable.cmd <verb>`，或 skill 内的相对路径调用（skill 的 SKILL.md 有完整说明）
-- **网络注意**：GitHub 直连不稳（时好时坏），engine 已缓存本地不用再下载；若 impeccable 要拉远端资源卡住，检查代理 `http://127.0.0.1:10808`
+**诊断结论（2026-10-19 用线上数据核实，两个独立问题）：**
 
-### 推荐工作流（按 Impeccable 自己的规矩来，别跳步）
+**问题 A：三个空壳"新会话"是用户在 laptop 上误触创建的，不是 bug 产出垃圾**。audit 日志显示 conv 210/217/224 在 09:30:11→09:30:15 **4 秒内连创 3 个**（envId=laptop），全是 0 entries、未命名、从没发过消息。结合交互流：CreateModal 里"最近项目"是 hub 维度的 cwd（`/var/lib/dorahub/workspace` 和 `F:/group` 交替——用户在新建弹窗里点了两下"最近项目"/"直接建"，每点一次创建一个会话并 navigate 过去）。**触发器大概率是重设计后的"＋新会话"入口在 laptop 触屏/小屏上过于好按 + 弹窗里"创建"路径太浅（选个最近项目就立即建会话）**。修复方向（下个会话定案）：
+- 创建后无任何消息的空会话，列表里默认折叠/不展示（或列表项标"未使用"可一键清理），不发消息不产生列表噪声
+- CreateModal 的"最近项目"点击改为"选中填入"而不是"立即创建"，统一走底部"创建"按钮确认
+- （可选）空会话进入后如果用户点返回/切换，自动软删（保留 S5 验收语义：发过消息的不会误删）
 
-1. **`impeccable context`**（每会话一次，skill Setup 第一步）
-2. **`/impeccable init`**：项目还没有 PRODUCT.md（context 已确认 NO_PRODUCT_MD）。init 会探索 repo + 向用户问几个产品真相问题（最多三轮）→ 写 PRODUCT.md。**注意：init 只记录产品事实，不读不写视觉方向**；它问用户时如实转达，别替用户编
-3. **`/impeccable document` 或 new-work 决策**：现有暖纸设计系统是“incumbent”。本次是**重设计（redesign）不是修复（refinement）**——按 skill 语义：保留产品真相/内容/功能/约束，旧视觉只作为 evidence 和 anti-reference，在 new-work 里选新世界，然后重写 DESIGN.md
-4. 设计新世界时记住本项目的硬约束（见 §5）
-5. 实现：只动 `packages/web/src`（组件结构/className 可重构，语义别推翻，见 §4 架构纪律）
-6. **`detect` 收尾**：改完跑 `impeccable detect --json <改动的文件>`，清零 slop 类 finding
-7. 验收（§7）→ 发版（§8）
+**问题 B：pi 会话扫描是"全部执行机"不是"本机"，且 laptop 用户误把 durable 列表当 pi 列表**。PiSessionsSection（设置弹窗 pi 页签）的 load() 扫的是 `executors.filter(e => e.envId !== "hub")` ——即 workpc+laptop **全部**，43+ 条混在一起，只靠小小的 env 徽章区分；重设计后设置弹窗在手机/小屏上入口深，用户看到的很可能是 durable 会话列表（问题 A 的空壳）而以为是 pi 扫描结果。修复方向：
+- pi 页签里按执行机分组显示（laptop 一组、workpc 一组），或加 env 筛选 chip，默认展开/置顶**当前访问设备对应的执行机**（无可靠映射时默认全部展开但分组清晰）
+- 确认 `~` 展开正确（已验证 laptop 返回的是 C:\Users\shigu 下的会话，后端没问题——api.piSessions("laptop") 返回 15 条 cwd 全是 laptop 路径；**后端无 bug，纯前端呈现问题**）
+- 顺带：空态文案"两台电脑上都没有 pi 会话"在 executors>2 台时也不对，改成按组报告
 
-### 用户已定的边界（别再问）
+**修完后验收**：在 laptop 上打开设置→pi 页签，能清楚分出 laptop 组（15 条，含 317绩效 等目录）和 workpc 组（29 条）；侧栏不再出现新空壳会话；旧空壳 210/217/224 软删掉（可手工：卡片✕）
 
-- 信息架构 10-18 版已定型（桌面两栏/手机驾驶舱），**本次重设计视觉层，不动 IA 骨架**
-- 不引 UI 组件库（ADR-010）；自写轻量 markdown/diff 渲染是特色（ADR-010），保留
-- 后端协议大改不做；小端点可以加
-- 改完发版云端（§8），用户自己验收
+### P0-2【用户口述，未诊断】"今天体验发现不少问题"——下个会话先问清单
+
+用户原话只给了 P0-1，说"文还有不少问题"。开场先请用户把剩余问题逐条列出来（哪个页面/什么操作/期望 vs 实际），逐条诊断修复。本文档只锁死 P0-1 的结论，其余以用户补述为准。
+
+### 本次任务边界
+
+- 这是修 bug/体验会话，不是重设计会话：视觉系统 v3.2（蓝色版）保持不动，修问题不得推翻 DESIGN.md 世界观；确需动样式时遵循现有 token
+- 修完必须过 §7 验收基线（特别是 S5 自动命名、S9 双模式、S10 detect 清零）
+- 后端可以小改（如空会话过滤需要列表 API 配合），协议大改不做
 
 ### 产品真相（2026-10-19 用户拍板，PRODUCT.md / init 问题可直接引用）
 
@@ -167,15 +166,17 @@ web/src/
 
 架构纪律（ADR-004/010）：**事件流驱动 reducer、snapshot 全量替换、无全局状态库、不引 UI 组件库**。可以优化结构，别推翻语义。
 
-## 5. 设计现状与约束（UI 重设计必读）
+## 5. 设计现状与约束（修 bug 会话必读：视觉系统 v3 是正式系统，不是草稿）
 
-### 现有视觉系统（incumbent，重设计的 anti-reference）
+### 现有视觉系统（v3「原稿格工作台」，2026-10-18 重设计会话产物）
 
-- 暖纸浅色（类 claude.ai ivory）+ 自动深色跟随系统 + terracotta 橙 accent；参照系 claude.ai / Linear / Things 3
-- 全部在 `packages/web/src/style.css`（~750 行）：token 段（--bg/--accent/--sp-*/--r-*/--shadow-*）+ 各组件样式
-- 已知问题（impeccable detect 实拽）：3 处 side-tab 左边框（tool-card/confirm-card 区）是最典型 AI 味；用户 10-16 也点名过“臃肿”
+- **世界观**：漫画原稿格的框语法 × 工作马字体。框即语义六类：实线=人写/待拍板、虚线=进行中、细线=机器完成、无框=叙述、网点底=机器输出、朱砂=等人出手
+- **字体**：IBM Plex Sans/Mono + Noto Sans SC 全自托管（@fontsource，已入 package.json）
+- **颜色**：v3.2 蓝色版——结构线与交互色转靓蓝（用户反馈"看不到蓝色"后升格）；对比度 WCAG AA 全底色达标（faint 2.40→4.88）
+- **权威文档**：packages/web/DESIGN.md（token 体系全量）+ PRODUCT.md（产品真相）+ .impeccable/（surface brief）；改样式先读 DESIGN.md，不得推翻世界观，只能在其 token 体系内修
+- **签名动作**：流式完成瞬间框缘闭合（dashed→solid 0.22s）、工具卡状态戳（讫/误/阻）——别碰
 
-### 硬约束（重设计不能碰的）
+### 硬约束（任何修改都不能碰的）
 
 1. **IA 骨架不动**：桌面两栏/手机驾驶舱/设置四页签/⋯菜单是 10-18 定型的信息架构，只换皮不改结构（用户已拍板）
 2. **不引 UI 组件库**（ADR-010）；markdown/diff 渲染自写是特色，保留
@@ -185,12 +186,11 @@ web/src/
 6. 无障碍基线：对比度、focus-ring、按钮可键盘触达
 7. 字体不许用 Inter/Arial/系统默认做主字体（impeccable 反模式，中文环境注意字体栈的中文回退）
 
-### 交给重设计会话的自由度
+### 修 bug 时的自由度
 
-- 配色/字体/圆角/阴影/间距节奏/组件形态全可换（token 体系保留结构可换值）
-- 消息流排版可重设计（现在全宽 760px 居中，claude.ai 式）
-- 动效可加（animate 命令），但手机低端机性能要注意
-- 用户审美否决项：不要程序员黑、不要边框方盒堆叠；新世界不限于暖纸系
+- 新增交互/状态展示可用现有 token 体系内的任何样式；确需新 token 时先补进 DESIGN.md 再用
+- 涉及产品语义的改动（如空会话自动清理的时机）先问用户再定案
+- 用户审美否决项依旧：不要程序员黑、不要边框方盒堆叠
 
 ### backlog（已迁移）
 

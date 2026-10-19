@@ -25,6 +25,8 @@ laptop(PWA) ─┘   serve/TLS   pi-durable + SQLite
 | 10-17 | pi 会话管理中心 | 会话软删除；跨机工作区迁移（harvest→中转搬运→校准提示）；pi CLI 会话扫描/元数据生成/导入 durable/删除/跨机搬运；/api/executors 秒回（缓存+后台探测）；执行机离线灰化 |
 | 10-18 | 桌面两栏 + UI 收敛 | 桌面 ≥769px 侧栏常驻两栏布局（当前会话高亮、空态引导）；手机驾驶舱模式（无管理功能）；设置弹窗四页签（执行机/渠道模型/pi 会话/关于）；会话页 header 收敛（模型标签直达切换、⋯ 菜单）；pi 会话区从列表页移入设置；Tailscale 改名 cyq→workpc + dev SSH 全通（本地 dev 三机全功能） |
 | 10-18 | 交接：UI 重设计准备 | 引入 impeccable（D:/hobby/impeccable，skill 已注册 pi、engine 已装）作为下一会话的 UI 重设计方法论；handoff v3 |
+| 10-18 | UI 重设计完成 | 视觉系统 v3「原稿格工作台」上线（框即语义 × IBM Plex/Noto 自托管字体，impeccable 全流程：PRODUCT/DESIGN.md + detect 清零）；后经 v3.1/v3.2 用户 steer 升格蓝色 + 新 logo；产品真相拍板（邀请制小团队/BYOK/self-hosted 定位，多用户方案移 docs/roadmap.md） |
+| 10-19 | 交接：laptop 体验修复 | P0-1 诊断完成：空壳会话为 CreateModal 误触连创（audit 实证 4 秒 3 个）；pi 扫描无 bug 但呈现混组不分机器；handoff v4 锁死修复方向，待下会话执行 |
 
 ## 快速开始（workpc 本地开发）
 
