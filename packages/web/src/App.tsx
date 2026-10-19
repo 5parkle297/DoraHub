@@ -5,6 +5,7 @@ import { api } from "./api.ts";
 import { ConversationsPage, Sidebar, envLabel, projectOf } from "./components/Sidebar.tsx";
 import { ConversationPage } from "./pages/Conversation.tsx";
 import { SettingsModal } from "./components/SettingsModal.tsx";
+import { LogoLockup, LogoMark } from "./components/Logo.tsx";
 
 const CONN_LABEL: Record<string, { text: string; cls: string }> = {
   connecting: { text: "连接中…", cls: "bar-connecting" },
@@ -59,7 +60,7 @@ export function App() {
         <div className="page-list">
           <header className="list-header">
             <h1>
-              Dora<span className="brand-dot">Hub</span>
+              <LogoLockup size={26} fontSize="22px" />
             </h1>
             <NewConvButton />
           </header>
@@ -93,9 +94,7 @@ function SidebarHeader() {
         title="回到会话列表"
         onClick={() => navigate({ page: "conversations" })}
       >
-        <h1>
-          Dora<span className="brand-dot">Hub</span>
-        </h1>
+        <LogoLockup size={22} />
       </button>
       <div className="header-btns">
         <button className="btn ghost icon-btn" title="设置" onClick={() => setSettingsOpen(true)}>
@@ -132,7 +131,10 @@ function WelcomePane() {
   return (
     <div className="welcome-pane">
       <div className="welcome-logo">
-        Dora<span className="brand-dot">Hub</span>
+        <LogoMark size={52} />
+        <span className="logo-word">
+          Dora<span className="logo-hub">Hub</span>
+        </span>
       </div>
       <div className="welcome-sub">跨设备持久化 Agent 平台</div>
       <div className="welcome-hint">从左侧选择一个会话，或点左上「＋ 新会话」</div>

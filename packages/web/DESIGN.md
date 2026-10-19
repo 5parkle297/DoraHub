@@ -48,6 +48,10 @@ typography:
     fontFamily: "IBM Plex Sans, Noto Sans SC, PingFang SC, Microsoft YaHei, sans-serif"
     fontSize: "32px"
     fontWeight: 700
+  brand-wordmark:
+    fontFamily: "M PLUS Rounded 1c, IBM Plex Sans, Noto Sans SC, sans-serif"
+    fontSize: "22px"
+    fontWeight: 800
 rounded:
   xl: "14px"
   md: "10px"
@@ -136,6 +140,8 @@ DoraHub 的界面是漫画原稿的工作台：页面底是带浅蓝格纹的原
 **Label/Mono Font:** IBM Plex Mono（回退 ui-monospace / Consolas）
 
 **Character:** 全部自托管（@fontsource），无外部字体请求。Plex 家族同源的 sans/mono 保证混排和谐；中文由 Noto Sans SC 数百分片按 unicode-range 懒加载。
+
+**Brand（字标专用）**：M PLUS Rounded 1c 800——日系圆体，只用于 DoraHub 字标（logo lockup），呼应 UI 圆角阶梯与哆啦A梦的品牌联想；正文/标签一律不碰。
 
 ### Hierarchy
 

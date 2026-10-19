@@ -189,6 +189,20 @@ a { color: var(--blue); }
 .list-header h1 { font-size: var(--fs-xl); font-weight: 700; margin: 0; letter-spacing: -0.01em; }
 .brand-dot { color: var(--blue); }
 
+/* ---- Logo lockup（半脸 D · 三须 · 弧嘴）---- */
+.logo-lockup { display: inline-flex; align-items: center; gap: 8px; }
+.logo-word {
+  font-family: "M PLUS Rounded 1c", "IBM Plex Sans", "Noto Sans SC", sans-serif;
+  font-weight: 800; letter-spacing: -0.01em; color: var(--text);
+}
+.logo-hub { color: var(--blue); }
+@media (prefers-color-scheme: dark) {
+  .logo-lockup { --logo-bg: #211f1a; --logo-face: #191713; --logo-blue: #4aa3d8; --logo-nose: #e05a4e; --logo-ink: #e8e4d8; }
+}
+.welcome-logo { display: flex; align-items: center; gap: 14px; font-size: 32px; font-weight: 800; letter-spacing: -0.01em; }
+.welcome-logo .logo-word { font-family: "M PLUS Rounded 1c", "IBM Plex Sans", "Noto Sans SC", sans-serif; }
+.welcome-logo .logo-hub { color: var(--blue); }
+
 .conv-list { flex: 1; overflow-y: auto; padding: 0 var(--sp-4) var(--sp-6); display: flex; flex-direction: column; gap: var(--sp-4); }
 @media (max-width: 768px) {
   .page-list { max-width: none; }
@@ -763,7 +777,9 @@ a { color: var(--blue); }
   flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: var(--sp-2); padding: var(--sp-6);
 }
-.welcome-logo { font-size: 32px; font-weight: 700; letter-spacing: -0.01em; }
+.welcome-logo { display: flex; align-items: center; gap: 14px; font-size: 32px; font-weight: 800; letter-spacing: -0.01em; }
+.welcome-logo .logo-word { font-family: "M PLUS Rounded 1c", "IBM Plex Sans", "Noto Sans SC", sans-serif; }
+.welcome-logo .logo-hub { color: var(--blue); }
 .welcome-sub { color: var(--text-dim); font-size: var(--fs-md); }
 .welcome-hint { color: var(--text-faint); font-size: var(--fs-sm); margin-top: var(--sp-3); }
 .welcome-recent {
