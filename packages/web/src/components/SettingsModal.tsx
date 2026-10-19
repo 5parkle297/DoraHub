@@ -1,20 +1,19 @@
 /**
  * 设置弹窗（UI 收敛 2026-10-18，仅桌面两栏模式的左栏入口）：
- * 收纳执行机状态 / 渠道与模型 / pi 会话管理 / 关于。
- * 手机端无管理功能（手机 = 驾驶舱模式，不做本机会话等管理）。
+ * 收纳执行机状态 / 渠道与模型 / 关于。
+ * pi 会话已移到左侧栏常驻（P0-2 #1，2026-10-19 用户拍板）。
+ * 手机端无管理功能（手机 = 驾驶舱模式）。
  */
 import { useEffect, useState } from "react";
 import { api } from "../api.ts";
 import { Modal } from "./Modal.tsx";
-import { PiSessionsSection } from "./PiSessions.tsx";
 import type { ExecutorInfo } from "@dorahub/shared";
 
-type Tab = "executors" | "channels" | "pi" | "about";
+type Tab = "executors" | "channels" | "about";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "executors", label: "执行机" },
   { id: "channels", label: "渠道与模型" },
-  { id: "pi", label: "pi 会话" },
   { id: "about", label: "关于" },
 ];
 
@@ -50,7 +49,6 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
 
       {tab === "executors" && <ExecutorsTab executors={executors} onRefresh={refreshExecutors} />}
       {tab === "channels" && <ChannelsTab />}
-      {tab === "pi" && <PiSessionsSection executors={executors} onOpen={refreshExecutors} />}
       {tab === "about" && <AboutTab health={health} />}
     </Modal>
   );

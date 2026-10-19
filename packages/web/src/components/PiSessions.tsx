@@ -1,8 +1,9 @@
 /**
- * pi CLI 会话区（列表页底部，2026-10-17）：
- * 列出各执行机上 ~/.pi/agent/sessions/ 的本地 pi 会话，
- * 可按需搬运到另一台机器（落盘即 /resume 可见，无需 pi 插件——
- * pi 的会话就是 jsonl 文件，同构搬运）。
+ * pi CLI 会话（P0-2 #1 重构，2026-10-19）：
+ * - 侧栏常驻区（SidebarSidebar）：打开即后台自动扫描所有执行机，不用点任何按钮；
+ *   只展示时间窗内的：3 天内 / 3-7 天前，每机每档最多 3 条 + "更多"入口
+ * - 全量管理弹窗（PiFullModal）：按机器分组全量列表，含导入/删除/搬运
+ * - 旧入口（设置弹窗 pi 页签）已移除——挪到侧栏是用户 10-19 拍板的 IA 变更
  */
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../api.ts";
@@ -11,30 +12,200 @@ import { navigate } from "../route.ts";
 import { Modal } from "./Modal.tsx";
 import type { ExecutorInfo, PiSessionInfo } from "@dorahub/shared";
 
-interface PiSession extends PiSessionInfo {}
+const DAY_MS = 86_400_000;
 
-export function PiSessionsSection({ executors, onOpen }: { executors: ExecutorInfo[]; onOpen?: () => void }) {
-  const [sessions, setSessions] = useState<PiSession[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [open, setOpen] = useState(false);
-  const [error, setError] = useState("");
-  const [moving, setMoving] = useState<PiSession | null>(null);
-
-  // 导入 / 删除状态
+/** 侧栏常驻 pi 会话区：自动扫描 + 时间窗（3 天 / 3-7 天，每机每档最多 3 条）。 */
+export function PiSidebarSection({ executors }: { executors: ExecutorInfo[] }) {
+  const [sessions, setSessions] = useState<PiSessionInfo[] | null>(null); // null = 还没扫到
+  const [fullOpen, setFullOpen] = useState(false);
   const [importing, setImporting] = useState<string | null>(null);
-  const [deleting, setDeleting] = useState<string | null>(null);
+  const [confirmImport, setConfirmImport] = useState<PiSessionInfo | null>(null);
   /** 已导入的 pi 会话：sessionId -> durable convId */
   const [importedIds, setImportedIds] = useState<Map<string, string>>(new Map());
 
-  async function doImport(sess: PiSession) {
+  const envIds = useMemo(() => executors.filter((e) => e.envId !== "hub").map((e) => e.envId), [executors]);
+
+  // 自动扫描：executors 一到就开始（不等用户点），失败静默（侧栏不报错）
+  useEffect(() => {
+    if (envIds.length === 0) return;
+    let alive = true;
+    (async () => {
+      const results = await Promise.all(envIds.map((e) => api.piSessions(e).catch(() => [] as PiSessionInfo[])));
+      if (alive) setSessions(results.flat());
+    })();
+    return () => { alive = false; };
+  }, [envIds.join(",")]);
+
+  // 有未就绪的 meta（首次扫描后台生成中）→ 8s 轮询拉新，直到全部就绪；弹窗打开时也刷新
+  const pendingMeta = !!sessions?.some((s) => !s.metaReady);
+  useEffect(() => {
+    if (!pendingMeta || fullOpen) return;
+    const t = setInterval(async () => {
+      if (document.hidden || envIds.length === 0) return;
+      const results = await Promise.all(envIds.map((e) => api.piSessions(e).catch(() => [] as PiSessionInfo[])));
+      setSessions((prev) => prev ?? results.flat());
+      setSessions(results.flat());
+    }, 8000);
+    return () => clearInterval(t);
+  }, [pendingMeta, fullOpen, envIds.join(",")]);
+
+  async function doImport(sess: PiSessionInfo) {
+    setConfirmImport(null);
+    setImporting(sess.file);
+    try {
+      const r = await api.piSessionImport({ sourceEnvId: sess.envId, dir: sess.dir, file: sess.file });
+      setImportedIds((m) => new Map(m).set(sess.sessionId, r.convId));
+      if (!r.existing) navigate({ page: "conversation", id: r.convId });
+    } catch {
+      setConfirmImport(sess); // 失败退回确认态，用户可重试
+    } finally {
+      setImporting(null);
+    }
+  }
+
+  // 时间窗分组：每机每档最多 3 条
+  const windows = useMemo(() => {
+    const now = Date.now();
+    const d3 = sessions?.filter((s) => now - s.mtime < 3 * DAY_MS) ?? [];
+    const d7 = sessions?.filter((s) => {
+      const age = now - s.mtime;
+      return age >= 3 * DAY_MS && age < 7 * DAY_MS;
+    }) ?? [];
+    const cap = (list: PiSessionInfo[]) => {
+      const byEnv = new Map<string, PiSessionInfo[]>();
+      for (const s of list) {
+        const arr = byEnv.get(s.envId) ?? [];
+        if (arr.length < 3) { arr.push(s); byEnv.set(s.envId, arr); }
+      }
+      return [...byEnv.values()].flat();
+    };
+    return { d3: cap(d3).sort((a, b) => b.mtime - a.mtime), d7: cap(d7).sort((a, b) => b.mtime - a.mtime) };
+  }, [sessions]);
+
+  if (envIds.length === 0) return null;
+
+  return (
+    <div className="pi-side">
+      <div className="pi-side-head">
+        <span>电脑上的 pi 会话</span>
+        <button className="pi-side-more" onClick={() => setFullOpen(true)}>更多 →</button>
+      </div>
+
+      {sessions === null ? (
+        <div className="pi-side-hint">扫描中…</div>
+      ) : (
+        <>
+          {windows.d3.length > 0 && (
+            <div className="pi-side-group">
+              <div className="pi-side-window">3 天内</div>
+              {windows.d3.map((s) => (
+                <PiSideItem key={`${s.envId}/${s.file}`} s={s} importing={importing === s.file}
+                  imported={importedIds.get(s.sessionId)} onImport={() => setConfirmImport(s)} />
+              ))}
+            </div>
+          )}
+          {windows.d7.length > 0 && (
+            <div className="pi-side-group">
+              <div className="pi-side-window">3-7 天前</div>
+              {windows.d7.map((s) => (
+                <PiSideItem key={`${s.envId}/${s.file}`} s={s} importing={importing === s.file}
+                  imported={importedIds.get(s.sessionId)} onImport={() => setConfirmImport(s)} />
+              ))}
+            </div>
+          )}
+          {windows.d3.length === 0 && windows.d7.length === 0 && (
+            <div className="pi-side-hint">最近 7 天没有 pi 会话</div>
+          )}
+        </>
+      )}
+
+      {confirmImport && (
+        <Modal onClose={() => setConfirmImport(null)}>
+          <h3>导入 pi 会话</h3>
+          <div style={{ fontSize: "var(--fs-sm)", color: "var(--text-dim)", lineHeight: 1.7 }}>
+            把 <strong>{confirmImport.envId}</strong> 上的会话「{confirmImport.title ?? confirmImport.preview?.slice(0, 40) ?? confirmImport.sessionId.slice(0, 8)}」导入云端？
+            导入后在任何设备都能接着聊。
+          </div>
+          <div className="modal-actions">
+            <button className="btn" onClick={() => setConfirmImport(null)}>取消</button>
+            <button className="btn primary" disabled={importing !== null} onClick={() => doImport(confirmImport)}>
+              {importing ? "导入中…" : "导入"}
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {fullOpen && (
+        <PiFullModal
+          executors={executors}
+          sessions={sessions}
+          importedIds={importedIds}
+          onImported={(sid, convId) => setImportedIds((m) => new Map(m).set(sid, convId))}
+          onClose={() => setFullOpen(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+/** 侧栏单条 pi 会话（紧凑行：标题 + 时间 + 快速导入）。 */
+function PiSideItem({ s, importing, imported, onImport }: {
+  s: PiSessionInfo; importing: boolean; imported: string | undefined; onImport: () => void;
+}) {
+  const title = s.title ?? s.preview?.slice(0, 30) ?? s.sessionId.slice(0, 8);
+  return (
+    <div className="pi-side-item">
+      <div className="pi-side-item-top">
+        <span className="pi-side-env">{s.envId}</span>
+        <span className={`pi-side-title ${s.metaReady ? "" : "pending"}`} title={s.cwd}>{title}</span>
+        <span className="pi-side-time">{relTime(s.mtime)}</span>
+      </div>
+      <div className="pi-side-sub">
+        <span className="pi-side-cwd">{s.cwd}</span>
+        {imported ? (
+          <button className="pi-side-act" onClick={() => navigate({ page: "conversation", id: imported })}>▶ 打开</button>
+        ) : (
+          <button className="pi-side-act" disabled={importing} onClick={onImport}>
+            {importing ? "导入中…" : "⤵"}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** 全量管理弹窗："更多 →" 入口。按机器分组全量列表，含导入/删除/搬运。 */
+export function PiFullModal({ executors, sessions, importedIds, onImported, onClose }: {
+  executors: ExecutorInfo[];
+  sessions: PiSessionInfo[] | null;
+  importedIds: Map<string, string>;
+  onImported: (sid: string, convId: string) => void;
+  onClose: () => void;
+}) {
+  const [local, setLocal] = useState<PiSessionInfo[] | null>(sessions);
+  const [importing, setImporting] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
+  const [moving, setMoving] = useState<PiSessionInfo | null>(null);
+  const [error, setError] = useState("");
+
+  // 打开时重新扫一遍（拿最新）
+  const envIds = useMemo(() => executors.filter((e) => e.envId !== "hub").map((e) => e.envId), [executors]);
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const results = await Promise.all(envIds.map((e) => api.piSessions(e).catch(() => [] as PiSessionInfo[])));
+      if (alive) setLocal(results.flat());
+    })();
+    return () => { alive = false; };
+  }, [envIds.join(",")]);
+
+  async function doImport(sess: PiSessionInfo) {
     setImporting(sess.file);
     setError("");
     try {
       const r = await api.piSessionImport({ sourceEnvId: sess.envId, dir: sess.dir, file: sess.file });
-      setImportedIds((m) => new Map(m).set(sess.sessionId, r.convId));
-      if (!r.existing) {
-        navigate({ page: "conversation", id: r.convId });
-      }
+      onImported(sess.sessionId, r.convId);
+      if (!r.existing) navigate({ page: "conversation", id: r.convId });
     } catch (e: any) {
       setError("导入失败：" + e.message);
     } finally {
@@ -42,13 +213,13 @@ export function PiSessionsSection({ executors, onOpen }: { executors: ExecutorIn
     }
   }
 
-  async function doDelete(sess: PiSession) {
+  async function doDelete(sess: PiSessionInfo) {
     if (!confirm("删除 " + (sess.title || sess.preview || sess.file.slice(0, 30)) + "？此操作不可恢复（删除源机上的 .jsonl 文件）。")) return;
     setDeleting(sess.file);
     setError("");
     try {
       await api.piSessionDelete({ envId: sess.envId, dir: sess.dir, file: sess.file });
-      await load();
+      setLocal((ls) => ls?.filter((s) => s.file !== sess.file) ?? ls);
     } catch (e: any) {
       setError("删除失败：" + e.message);
     } finally {
@@ -56,68 +227,31 @@ export function PiSessionsSection({ executors, onOpen }: { executors: ExecutorIn
     }
   }
 
-  async function load() {
-    setLoading(true);
-    setError("");
-    try {
-      const results = await Promise.all(
-        executors.filter((e) => e.envId !== "hub").map((e) => api.piSessions(e.envId).catch(() => [])),
-      );
-      setSessions(results.flat());
-    } catch (e: any) {
-      setError(e.message);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  // P0-1 问题 B：按执行机分组显示；组内按 mtime 倒序
   const groups = useMemo(() => {
-    const byEnv = new Map<string, PiSession[]>();
-    for (const s of sessions) {
+    const byEnv = new Map<string, PiSessionInfo[]>();
+    for (const s of local ?? []) {
       if (!byEnv.has(s.envId)) byEnv.set(s.envId, []);
       byEnv.get(s.envId)!.push(s);
     }
     for (const list of byEnv.values()) list.sort((a, b) => b.mtime - a.mtime);
     return [...byEnv.entries()].map(([env, items]) => ({ env, items }));
-  }, [sessions]);
-
-  useEffect(() => {
-    if (open) load();
-  }, [open]);
-
-  // 有未就绪的 meta（首次扫描后台生成中）→ 8s 轮询拉新，直到全部就绪
-  useEffect(() => {
-    if (!open || loading) return;
-    const pendingMeta = sessions.some((s) => !s.metaReady);
-    if (!pendingMeta) return;
-    const t = setInterval(() => {
-      if (!document.hidden) load();
-    }, 8000);
-    return () => clearInterval(t);
-  }, [open, loading, sessions]);
+  }, [local]);
 
   return (
-    <div className="pi-sessions">
-      <button className="pi-toggle" onClick={() => { setOpen(!open); if (!open) onOpen?.(); }}>
-        <span>⌨ 电脑上的 pi CLI 会话</span>
-        <span className="pi-count">{open ? "▾" : "▸"}</span>
-      </button>
-
-      {open && (
-        <div className="pi-list">
-          {loading && <div className="pi-empty">扫描中…</div>}
-          {error && <div className="pi-empty">{error}</div>}
-          {!loading && !error && groups.length === 0 && (
-            <div className="pi-empty">各台执行机上都没有 pi 会话（~/.pi/agent/sessions/ 为空）</div>
-          )}
-          {groups.map((g) => (
-            <div key={g.env} className="pi-group">
-              <div className="group-label">
-                <span className="group-name">🖥 {g.env}</span>
-                <span className="group-count">{g.items.length} 个 pi 会话</span>
-              </div>
-              {g.items.map((s) => (
+    <Modal onClose={onClose}>
+      <h3>pi 会话（全部）</h3>
+      {local === null && <div className="pi-empty">扫描中…</div>}
+      {error && <div className="pi-empty">{error}</div>}
+      {local !== null && groups.length === 0 && (
+        <div className="pi-empty">各台执行机上都没有 pi 会话（~/.pi/agent/sessions/ 为空）</div>
+      )}
+      {groups.map((g) => (
+        <div key={g.env} className="pi-group">
+          <div className="group-label">
+            <span className="group-name">🖥 {g.env}</span>
+            <span className="group-count">{g.items.length} 个 pi 会话</span>
+          </div>
+          {g.items.map((s) => (
             <div key={`${s.envId}/${s.file}`} className="pi-item">
               <div className="pi-item-top">
                 <span className={`pi-title ${s.metaReady ? "" : "pi-pending"}`}>
@@ -137,7 +271,7 @@ export function PiSessionsSection({ executors, onOpen }: { executors: ExecutorIn
                   )}
                 </>
               ) : (
-                <div className="pi-desc pi-pending">摘要生成中…（首次扫描后自动补全，稍后自动刷新）</div>
+                <div className="pi-desc pi-pending">摘要生成中…（首次扫描后自动补全）</div>
               )}
               <div className="pi-meta">
                 {s.cwd} · {(s.size / 1024).toFixed(0)}KB
@@ -156,21 +290,18 @@ export function PiSessionsSection({ executors, onOpen }: { executors: ExecutorIn
                 </span>
               </div>
             </div>
-              ))}
-            </div>
           ))}
         </div>
-      )}
-
+      ))}
       {moving && (
         <PiMoveModal
           session={moving}
           executors={executors}
           onClose={() => setMoving(null)}
-          onDone={() => { setMoving(null); load(); }}
+          onDone={() => setMoving(null)}
         />
       )}
-    </div>
+    </Modal>
   );
 }
 
@@ -180,7 +311,7 @@ function PiMoveModal({
   onClose,
   onDone,
 }: {
-  session: PiSession;
+  session: PiSessionInfo;
   executors: ExecutorInfo[];
   onClose: () => void;
   onDone: () => void;

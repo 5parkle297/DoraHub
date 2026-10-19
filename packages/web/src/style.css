@@ -627,6 +627,59 @@ a { color: var(--blue); }
 }
 .pi-move:hover { color: var(--accent-text); border-color: var(--accent); }
 
+/* pi 会话：侧栏常驻区（P0-2 #1） */
+.pi-side {
+  margin-top: var(--sp-4); padding-top: var(--sp-3);
+  border-top: 1.5px solid var(--ink-soft);
+}
+.pi-side-head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  padding: 0 var(--sp-2) var(--sp-1);
+}
+.pi-side-head > span {
+  font-size: var(--fs-sm); font-weight: 700; color: var(--text);
+}
+.pi-side-more {
+  background: none; border: none; cursor: pointer; padding: 0;
+  color: var(--text-dim); font-size: var(--fs-xs); font-family: var(--sans);
+}
+.pi-side-more:hover { color: var(--accent-text); text-decoration: underline; }
+.pi-side-group { display: flex; flex-direction: column; gap: 4px; margin-bottom: var(--sp-2); }
+.pi-side-window {
+  font-size: var(--fs-xs); color: var(--text-faint); font-family: var(--mono);
+  padding: var(--sp-1) var(--sp-2) 0;
+}
+.pi-side-hint { color: var(--text-faint); font-size: var(--fs-xs); padding: var(--sp-1) var(--sp-2); }
+.pi-side-item {
+  background: var(--bg-sunken); border: 1px solid transparent; border-radius: var(--r-sm);
+  padding: 6px 10px; cursor: default;
+}
+.pi-side-item:hover { background: var(--bg-hover); }
+.pi-side-item-top { display: flex; align-items: center; gap: var(--sp-2); }
+.pi-side-env {
+  color: var(--blue); background: var(--blue-soft);
+  font-size: var(--fs-xs); border-radius: var(--r-sm); padding: 0 6px; flex: none; font-family: var(--mono);
+}
+.pi-side-title {
+  flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--text); font-size: var(--fs-sm); font-weight: 600;
+}
+.pi-side-title.pending { color: var(--text-dim); font-weight: 500; }
+.pi-side-time { color: var(--text-faint); font-size: var(--fs-xs); flex: none; font-family: var(--mono); }
+.pi-side-sub {
+  display: flex; align-items: center; gap: var(--sp-2); margin-top: 2px;
+}
+.pi-side-cwd {
+  flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--text-faint); font-size: var(--fs-xs); font-family: var(--mono);
+}
+.pi-side-act {
+  flex: none; background: none; border: 1px solid var(--border); color: var(--text-dim);
+  border-radius: var(--r-sm); padding: 1px 8px; font-size: var(--fs-xs);
+  cursor: pointer; font-family: var(--sans);
+}
+.pi-side-act:hover { color: var(--accent-text); border-color: var(--accent); }
+
 /* /model 式模型列表 */
 .model-search { margin-bottom: var(--sp-2); }
 .model-list {

@@ -10,6 +10,7 @@ import { wsClient } from "../ws.ts";
 import { navigate, useRoute } from "../route.ts";
 import { ConvCard } from "./ConvCard.tsx";
 import { CreateModal } from "./CreateModal.tsx";
+import { PiSidebarSection } from "./PiSessions.tsx";
 import type { ConversationSummary, ExecutorInfo } from "@dorahub/shared";
 
 /** cwd → 项目显示名（basename） */
@@ -159,6 +160,9 @@ function ConversationsInner() {
           ))}
         </div>
       ))}
+
+      {/* pi 会话（P0-2 #1）：常驻侧栏，自动扫描，只留时间窗内的；手机列表页同体 */}
+      <PiSidebarSection executors={executors} />
 
       {creating && (
         <CreateModal
