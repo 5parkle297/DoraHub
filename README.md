@@ -27,6 +27,7 @@ laptop(PWA) ─┘   serve/TLS   pi-durable + SQLite
 | 10-18 | 交接：UI 重设计准备 | 引入 impeccable（D:/hobby/impeccable，skill 已注册 pi、engine 已装）作为下一会话的 UI 重设计方法论；handoff v3 |
 | 10-18 | UI 重设计完成 | 视觉系统 v3「原稿格工作台」上线（框即语义 × IBM Plex/Noto 自托管字体，impeccable 全流程：PRODUCT/DESIGN.md + detect 清零）；后经 v3.1/v3.2 用户 steer 升格蓝色 + 新 logo；产品真相拍板（邀请制小团队/BYOK/self-hosted 定位，多用户方案移 docs/roadmap.md） |
 | 10-19 | 交接：laptop 体验修复 | P0-1 诊断完成：空壳会话为 CreateModal 误触连创（audit 实证 4 秒 3 个）；pi 扫描无 bug 但呈现混组不分机器；handoff v4 锁死修复方向，待下会话执行 |
+| 10-19 | P0-1 修复上线 | 空壳会话治理（新建两步确认+成功关弹窗+空会话不进列表+conv_meta 补拉 upsert）；pi 扫描按执行机分组（laptop 15/workpc 30 实测）；线上空壳 177/210/217/224 全清；sw v8；handoff v5 |
 
 ## 快速开始（workpc 本地开发）
 
