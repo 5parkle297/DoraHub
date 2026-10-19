@@ -45,7 +45,7 @@
 - **隔离**：会话按 owner 隔离（只能看到自己的云端会话）；执行机是资源边界——他人会话默认只能跑 hub，不能用你的 workpc/laptop；想加自己的机器当执行机自愿注册
 - **模型 key = BYOK**：同事在设置里填自己的 provider + key，不用你的 key，你也不替任何人付钱
 - **前端注意**：UI 重设计要给“未来身份”留口子（header 能容纳用户名/头像，设置弹窗留"模型渠道/账号"分组可放 BYOK 表单），但**本次不做登录页、不做用户切换**
-- **后置 milestone（UI 稳定后第一个后端任务，不在本次范围）**：身份中间件 + ConvMetaDoc.owner + 列表/快照过滤 + 执行机归属校验 + BYOK 渠道存储（per-user channels）+ 迁移并发限制 + 收紧 tailnet ACL（同事只能访问 hub 443）+ hub 加 swap
+- **后置 milestone（不在本次范围，完整方案见 docs/roadmap.md §1）**：多用户隔离（同事接入前的前置）——身份中间件/owner/过滤/执行机边界/BYOK/ACL 收紧等，全部 UI 稳定后由后端会话做。前端本次只需：布局不焊死 single-player（header 能容纳用户名，设置能加"我的渠道"页签）
 
 ## 1. 开发环境（workpc，Windows）
 
@@ -192,11 +192,9 @@ web/src/
 - 动效可加（animate 命令），但手机低端机性能要注意
 - 用户审美否决项：不要程序员黑、不要边框方盒堆叠；新世界不限于暖纸系
 
-### backlog（重设计之外的功能债，下次再说）
+### backlog（已迁移）
 
-- P1：usage 面板、compaction 标记、fork 选点、会话配置编辑、会话页 degraded 兜底、虚拟列表、PWA 图标/Web Push
-- P2：thinking 动效、图片消息展示、pi 导入 system 消息处理
-- 手机接入（NovaScale/Funnel+token）：等用户主动提，当前搁置
+功能债与中长期项全部移至 docs/roadmap.md，本文不再维护双份。
 
 ## 6. 坑清单（血泪，别再踩）
 
