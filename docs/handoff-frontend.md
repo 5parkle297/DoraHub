@@ -38,6 +38,15 @@
 - 后端协议大改不做；小端点可以加
 - 改完发版云端（§8），用户自己验收
 
+### 产品真相（2026-10-19 用户拍板，PRODUCT.md / init 问题可直接引用）
+
+- **用户与阶段**：当前 single-player；近期 = 邀请制小团队共享同一个 hub 实例（≤3 人，Tailscale 免费版上限）；远期 = 开源 self-hosted 应用（类 Gitea，每团队一台实例，docker compose 一键起）。**永不做多租户 SaaS**
+- **身份**：每人自己注册 Tailscale 账号、自己管自己设备，被邀请进 tailnet；hub 靠 serve 注入的 `Tailscale-User-Login` 头识别用户（无注册流、无密码）
+- **隔离**：会话按 owner 隔离（只能看到自己的云端会话）；执行机是资源边界——他人会话默认只能跑 hub，不能用你的 workpc/laptop；想加自己的机器当执行机自愿注册
+- **模型 key = BYOK**：同事在设置里填自己的 provider + key，不用你的 key，你也不替任何人付钱
+- **前端注意**：UI 重设计要给“未来身份”留口子（header 能容纳用户名/头像，设置弹窗留"模型渠道/账号"分组可放 BYOK 表单），但**本次不做登录页、不做用户切换**
+- **后置 milestone（UI 稳定后第一个后端任务，不在本次范围）**：身份中间件 + ConvMetaDoc.owner + 列表/快照过滤 + 执行机归属校验 + BYOK 渠道存储（per-user channels）+ 迁移并发限制 + 收紧 tailnet ACL（同事只能访问 hub 443）+ hub 加 swap
+
 ## 1. 开发环境（workpc，Windows）
 
 ```bash
