@@ -4,27 +4,14 @@
  * 可按需搬运到另一台机器（落盘即 /resume 可见，无需 pi 插件——
  * pi 的会话就是 jsonl 文件，同构搬运）。
  */
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { api } from "../api.ts";
 import { relTime } from "../util/time.ts";
 import { navigate } from "../route.ts";
 import { Modal } from "./Modal.tsx";
-import type { ExecutorInfo } from "@dorahub/shared";
+import type { ExecutorInfo, PiSessionInfo } from "@dorahub/shared";
 
-interface PiSession {
-  envId: string;
-  file: string;
-  dir: string;
-  sessionId: string;
-  cwd: string;
-  mtime: number;
-  preview: string;
-  size: number;
-  title: string | null;
-  description: string | null;
-  keywords: string[];
-  metaReady: boolean;
-}
+interface PiSession extends PiSessionInfo {}
 
 export function PiSessionsSection({ executors, onOpen }: { executors: ExecutorInfo[]; onOpen?: () => void }) {
   const [sessions, setSessions] = useState<PiSession[]>([]);
@@ -84,6 +71,17 @@ export function PiSessionsSection({ executors, onOpen }: { executors: ExecutorIn
     }
   }
 
+  // P0-1 问题 B：按执行机分组显示；组内按 mtime 倒序
+  const groups = useMemo(() => {
+    const byEnv = new Map<string, PiSession[]>();
+    for (const s of sessions) {
+      if (!byEnv.has(s.envId)) byEnv.set(s.envId, []);
+      byEnv.get(s.envId)!.push(s);
+    }
+    for (const list of byEnv.values()) list.sort((a, b) => b.mtime - a.mtime);
+    return [...byEnv.entries()].map(([env, items]) => ({ env, items }));
+  }, [sessions]);
+
   useEffect(() => {
     if (open) load();
   }, [open]);
@@ -110,13 +108,18 @@ export function PiSessionsSection({ executors, onOpen }: { executors: ExecutorIn
         <div className="pi-list">
           {loading && <div className="pi-empty">扫描中…</div>}
           {error && <div className="pi-empty">{error}</div>}
-          {!loading && !error && sessions.length === 0 && (
-            <div className="pi-empty">两台电脑上都没有 pi 会话（~/.pi/agent/sessions/ 为空）</div>
+          {!loading && !error && groups.length === 0 && (
+            <div className="pi-empty">各台执行机上都没有 pi 会话（~/.pi/agent/sessions/ 为空）</div>
           )}
-          {sessions.map((s) => (
+          {groups.map((g) => (
+            <div key={g.env} className="pi-group">
+              <div className="group-label">
+                <span className="group-name">🖥 {g.env}</span>
+                <span className="group-count">{g.items.length} 个 pi 会话</span>
+              </div>
+              {g.items.map((s) => (
             <div key={`${s.envId}/${s.file}`} className="pi-item">
               <div className="pi-item-top">
-                <span className="pi-env">{s.envId}</span>
                 <span className={`pi-title ${s.metaReady ? "" : "pi-pending"}`}>
                   {s.title ?? s.preview?.slice(0, 40) ?? s.sessionId.slice(0, 8)}
                 </span>
@@ -152,6 +155,8 @@ export function PiSessionsSection({ executors, onOpen }: { executors: ExecutorIn
                   <button className="pi-move" onClick={() => setMoving(s)}>→ 搬运</button>
                 </span>
               </div>
+            </div>
+              ))}
             </div>
           ))}
         </div>

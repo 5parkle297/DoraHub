@@ -48,9 +48,16 @@ export function CreateModal({
     }).catch(() => {});
   }, []);
 
+  // 两步确认（P0-1 问题 A）：点"最近项目"只选中填入，统一走底部"创建"，
+  // 防触屏误点直接连建空会话。
   function pick(cwd: string) {
-    rememberCwd(cwd, envId);
-    onCreate({ cwd, envId });
+    setCustom(cwd);
+  }
+
+  function create() {
+    const cwd = custom.trim();
+    if (cwd) rememberCwd(cwd, envId);
+    onCreate(cwd ? { cwd, envId } : { envId });
   }
 
   return (
@@ -89,7 +96,7 @@ export function CreateModal({
       <label className="picker-label">项目文件夹{currentExec && `（${envLabel(envId, currentExec.host)} 的路径）`}</label>
       <div className="cwd-options">
         {recent.map((cwd) => (
-          <button key={cwd} className="cwd-option" onClick={() => pick(cwd)}>
+          <button key={cwd} className={`cwd-option ${custom === cwd ? "on" : ""}`} onClick={() => pick(cwd)}>
             <span className="opt-name">{projectOf(cwd).name}</span>
             <span className="opt-path" title={cwd}>{cwd}</span>
           </button>
@@ -110,21 +117,17 @@ export function CreateModal({
           }
           onChange={(e) => setCustom(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && custom.trim()) pick(custom.trim());
+            if (e.key === "Enter") create();
           }}
         />
-        <button
-          className="btn primary"
-          style={{ flex: "none" }}
-          disabled={!custom.trim()}
-          onClick={() => pick(custom.trim())}
-        >
-          创建
-        </button>
       </div>
       <div className="modal-actions">
-        <button className="btn" onClick={() => onCreate({ envId })}>不选文件夹，直接建</button>
+        <button className="btn" onClick={() => setCustom("")}>清空所选</button>
+        <button className="btn primary" onClick={create}>
+          {custom.trim() ? `在 ${projectOf(custom.trim()).name} 创建` : "创建会话"}
+        </button>
       </div>
+      <div className="offline-hint">点选或输入路径后点"创建"；不选路径直接创建也行——发消息前它不会出现在列表里。</div>
     </Modal>
   );
 }

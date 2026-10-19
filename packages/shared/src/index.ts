@@ -33,6 +33,22 @@ export interface CreateConversationRequest {
   model?: string;
 }
 
+/** pi 会话扫描结果项（GET /api/pi-sessions；与 server PiSessionInfo 结构一致，单一定义源在 server）。 */
+export interface PiSessionInfo {
+  envId: string;
+  file: string;
+  dir: string;
+  sessionId: string;
+  cwd: string;
+  mtime: number;
+  preview: string;
+  size: number;
+  title: string | null;
+  description: string | null;
+  keywords: string[];
+  metaReady: boolean;
+}
+
 export interface CreateConversationResponse {
   id: string;
 }

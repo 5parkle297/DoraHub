@@ -120,8 +120,10 @@ function WelcomePane() {
     (async () => {
       try {
         const cs = await api.listConversations();
-        // 最近活动的 6 个（列表已按 updatedAt 语义服务端排序不可依赖，这里自己排）
-        setConvs([...cs].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 6));
+        // 最近活动的 6 个（列表已按 updatedAt 语义服务端排序不可依赖，这里自己排）。
+        // 空会话（P0-1）：无名字且无预览 = 从没发过消息，不展示，与侧栏过滤一致。
+        const visible = cs.filter((c) => c.name || c.lastPreview);
+        setConvs([...visible].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 6));
       } catch { /* 空态不展示错误 */ } finally {
         setLoaded(true);
       }

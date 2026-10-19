@@ -4,7 +4,7 @@
  * - 手机 <769px：整页列表（由 ConversationsPage 包裹），行为同旧版
  * 列表数据 + conv_status/conv_meta 实时推送都在这里（原 ConversationsPage 主体）。
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api.ts";
 import { wsClient } from "../ws.ts";
 import { navigate, useRoute } from "../route.ts";
@@ -58,7 +58,6 @@ function ConversationsInner() {
     window.addEventListener("dorahub:new-conv", on);
     return () => window.removeEventListener("dorahub:new-conv", on);
   }, []);
-
   function refreshExecutors() {
     api.executors().then(setExecutors).catch(() => {});
   }
@@ -80,26 +79,34 @@ function ConversationsInner() {
         if (f.t === "conv_status") {
           setConvs((cs) => cs.map((c) => (c.id === f.conv ? { ...c, status: f.status } : c)));
         } else if (f.t === "conv_meta") {
-          // 自动命名完成 → 无刷新换标题/描述（handoff S5）
-          setConvs((cs) =>
-            cs.map((c) =>
-              c.id === f.conv
-                ? { ...c, name: f.name, description: f.description, keywords: f.keywords, envId: f.envId }
-                : c,
-            ),
-          );
+          // 自动命名完成 → 无刷新换标题/描述（handoff S5）。
+          // 不在列表里的（新建未发消息被隐藏、或快照后新建的）→ 补拉全量，
+          // 否则被隐藏的空会话发首条消息后永远不出现。
+          setConvs((cs) => {
+            if (cs.some((c) => c.id === f.conv)) {
+              return cs.map((c) =>
+                c.id === f.conv
+                  ? { ...c, name: f.name, description: f.description, keywords: f.keywords, envId: f.envId }
+                  : c,
+              );
+            }
+            refresh();
+            return cs;
+          });
         }
       },
     });
     return unsub;
   }, []);
 
+  // 创建成功后关弹窗（P0-1：不关弹窗会让用户误以为没点上再点，4 秒连建 3 个的形态）
   async function create(opts: { cwd?: string; envId?: string }) {
     try {
       const { id } = await api.createConversation({
         ...(opts.cwd ? { cwd: opts.cwd } : {}),
         ...(opts.envId && opts.envId !== "hub" ? { envId: opts.envId } : {}),
       });
+      setCreating(false);
       navigate({ page: "conversation", id });
     } catch (e: any) {
       setError(e.message);
@@ -107,10 +114,13 @@ function ConversationsInner() {
     }
   }
 
-  // 按项目分组（cwd 为 key），组内按 updatedAt 倒排
+  // 按项目分组（cwd 为 key），组内按 updatedAt 倒序。
+  // P0-1 问题 A：没发过消息的空会话（无自动标题且无预览）不进列表，
+  // 防误触创建产生噪声；发首条消息后 conv_meta 推送会实时出现。
   const groups = useMemo(() => {
     const byCwd = new Map<string, ConversationSummary[]>();
     for (const c of convs) {
+      if (!c.name && !c.lastPreview) continue;
       const key = c.cwd ?? "";
       if (!byCwd.has(key)) byCwd.set(key, []);
       byCwd.get(key)!.push(c);
@@ -135,7 +145,7 @@ function ConversationsInner() {
     <div className="conv-list">
       {error && <div className="error-banner" onClick={() => setError("")}>{error} ✕</div>}
 
-      {convs.length === 0 && (
+      {groups.length === 0 && (
         <div className="empty">还没有会话。创建一个，任何设备都能接着聊。</div>
       )}
       {groups.map((g) => (

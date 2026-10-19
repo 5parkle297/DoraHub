@@ -54,10 +54,7 @@ export const api = {
   executors: () => call<import("@dorahub/shared").ExecutorInfo[]>("/api/executors"),
 
   piSessions: (env: string) =>
-    call<{
-      envId: string; file: string; dir: string; sessionId: string;
-      cwd: string; mtime: number; preview: string; size: number;
-    }[]>(`/api/pi-sessions?env=${encodeURIComponent(env)}`),
+    call<import("@dorahub/shared").PiSessionInfo[]>(`/api/pi-sessions?env=${encodeURIComponent(env)}`),
 
   piSessionImport: (req: { sourceEnvId: string; dir: string; file: string }) =>
     call<{ ok: true; convId: string; existing: boolean; imported: number }>("/api/pi-sessions/import", {
