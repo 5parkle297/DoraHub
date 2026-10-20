@@ -36,6 +36,12 @@
   --red-soft: #f6e3df;
   --blue: #2c5f7c;
   --blue-soft: #e3ecf2;
+  /* 设备标识色（P0-2 #2）：envId 哈希分配，hub 恒定云端灰；与状态色语义无关 */
+  --envc-0: #2c5f7c; --envc-0-soft: #e3ecf2;   /* 靖蓝（同 blue，作回退色） */
+  --envc-1: #266b42; --envc-1-soft: #e2efe5;   /* 印绿（P0-2 #2 加深保 AA：5.43） */
+  --envc-2: #8a5a14; --envc-2-soft: #f5ecd3;   /* 琥珀（加深保对比度） */
+  --envc-3: #9c4a8a; --envc-3-soft: #f3e5ef;   /* 紫暮（新增） */
+  --envc-hub: #645f53; --envc-hub-soft: #ecebe3; /* 云端 hub：墨灰 */
 
   /* 墨线框 */
   --ink: #1c1a17;
@@ -93,6 +99,11 @@
     --red-soft: #3a2320;
     --blue: #7aa9c7;
     --blue-soft: #1f2c35;
+    --envc-0: #7aa9c7; --envc-0-soft: #1f2c35;
+    --envc-1: #6cc08d; --envc-1-soft: #1f3126;
+    --envc-2: #d4a72c; --envc-2-soft: #32301a;
+    --envc-3: #cf8fc2; --envc-3-soft: #31212e;
+    --envc-hub: #a8a28c; --envc-hub-soft: #28251f;
     --ink: #e8e4d8;
     --ink-soft: rgba(232, 228, 216, 0.4);
     --shadow-1: 1px 2px 4px rgba(0, 0, 0, 0.28);
@@ -267,11 +278,20 @@ a { color: var(--blue); }
 /* 执行机徽章 */
 .conv-env { display: flex; align-items: center; gap: var(--sp-2); margin-top: 4px; font-size: var(--fs-xs); color: var(--text-faint); }
 .env-badge {
-  color: var(--blue); background: var(--blue-soft);
+  color: var(--envc-fg, var(--blue)); background: var(--envc-bg, var(--blue-soft));
   border-radius: var(--r-sm); padding: 1px 7px;
   font-size: var(--fs-xs); flex: none; font-family: var(--mono);
 }
-.env-tag { color: var(--blue); font-family: var(--mono); }
+/* 设备标识色变体（P0-2 #2）：只定义变量，基类（env-badge/env-tag/pi-side-env）消费——
+   变体与基类无优先级竞争，加在同一元素或任意祖先上都生效 */
+.envc-0 { --envc-fg: var(--envc-0); --envc-bg: var(--envc-0-soft); }
+.envc-1 { --envc-fg: var(--envc-1); --envc-bg: var(--envc-1-soft); }
+.envc-2 { --envc-fg: var(--envc-2); --envc-bg: var(--envc-2-soft); }
+.envc-3 { --envc-fg: var(--envc-3); --envc-bg: var(--envc-3-soft); }
+.envc-hub { --envc-fg: var(--envc-hub); --envc-bg: var(--envc-hub-soft); }
+/* 纯文字变体（分组头，无底色） */
+.envc-text { color: var(--envc-fg); }
+.env-tag { color: var(--envc-fg, var(--blue)); font-family: var(--mono); }
 .env-warning {
   background: var(--yellow-soft); color: var(--yellow);
   border-radius: var(--r-sm); padding: 10px 14px;
@@ -600,10 +620,6 @@ a { color: var(--blue); }
   padding: 8px 12px; font-size: var(--fs-sm);
 }
 .pi-item-top { display: flex; align-items: center; gap: var(--sp-2); }
-.pi-env {
-  color: var(--blue); background: var(--blue-soft);
-  font-size: var(--fs-xs); border-radius: var(--r-sm); padding: 1px 7px; flex: none; font-family: var(--mono);
-}
 .pi-preview { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
 .pi-title {
   flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -657,7 +673,7 @@ a { color: var(--blue); }
 .pi-side-item:hover { background: var(--bg-hover); }
 .pi-side-item-top { display: flex; align-items: center; gap: var(--sp-2); }
 .pi-side-env {
-  color: var(--blue); background: var(--blue-soft);
+  color: var(--envc-fg, var(--blue)); background: var(--envc-bg, var(--blue-soft));
   font-size: var(--fs-xs); border-radius: var(--r-sm); padding: 0 6px; flex: none; font-family: var(--mono);
 }
 .pi-side-title {

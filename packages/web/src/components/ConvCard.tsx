@@ -3,7 +3,7 @@ import { useState } from "react";
 import { api } from "../api.ts";
 import { navigate } from "../route.ts";
 import { relTime } from "../util/time.ts";
-import { envLabel, projectOf } from "./Sidebar.tsx";
+import { envLabel, envColorClass, projectOf } from "./Sidebar.tsx";
 import type { ConversationSummary } from "@dorahub/shared";
 
 export function ConvCard({
@@ -58,7 +58,7 @@ export function ConvCard({
       </div>
       {(conv.envId || conv.cwd) && (
         <div className="conv-env">
-          <span className="env-badge" title={conv.cwd ?? undefined}>
+          <span className={`env-badge ${envColorClass(conv.envId)}`} title={conv.cwd ?? undefined}>
             {envLabel(conv.envId)}
           </span>
           {conv.cwd && <span className="env-path">{projectOf(conv.cwd).path}</span>}

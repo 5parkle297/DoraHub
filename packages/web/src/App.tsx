@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useRoute, navigate, useIsWide } from "./route.ts";
 import { useApp } from "./state/conn.tsx";
 import { api } from "./api.ts";
-import { ConversationsPage, Sidebar, envLabel, projectOf } from "./components/Sidebar.tsx";
+import { ConversationsPage, Sidebar, envLabel, envColorClass, projectOf } from "./components/Sidebar.tsx";
 import { ConversationPage } from "./pages/Conversation.tsx";
 import { SettingsModal } from "./components/SettingsModal.tsx";
 import { LogoLockup, LogoMark } from "./components/Logo.tsx";
@@ -150,7 +150,7 @@ function WelcomePane() {
               onClick={() => navigate({ page: "conversation", id: c.id })}
             >
               <span className="welcome-conv-name">{c.name ?? "新会话"}</span>
-              <span className="welcome-conv-env">{envLabel(c.envId)} · {projectOf(c.cwd).name}</span>
+              <span className={`welcome-conv-env ${envColorClass(c.envId)} envc-text`}>{envLabel(c.envId)} · {projectOf(c.cwd).name}</span>
             </button>
           ))}
         </div>

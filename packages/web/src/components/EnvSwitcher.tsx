@@ -6,7 +6,7 @@
  */
 import { useState } from "react";
 import { api } from "../api.ts";
-import { envLabel } from "./Sidebar.tsx";
+import { envLabel, envColorClass } from "./Sidebar.tsx";
 import { Modal } from "./Modal.tsx";
 import type { ExecutorInfo } from "@dorahub/shared";
 
@@ -86,7 +86,7 @@ export function EnvSwitcher({
   return (
     <>
       <button
-        className="model-tag env-tag"
+        className={`model-tag env-tag ${envColorClass(current)}`}
         title="会话在这台机器上执行，点击切换 / 迁移"
         onClick={() => {
           onOpen?.();

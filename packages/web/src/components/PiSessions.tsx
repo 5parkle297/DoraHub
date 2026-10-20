@@ -10,6 +10,7 @@ import { api } from "../api.ts";
 import { relTime } from "../util/time.ts";
 import { navigate } from "../route.ts";
 import { Modal } from "./Modal.tsx";
+import { envColorClass } from "./Sidebar.tsx";
 import type { ExecutorInfo, PiSessionInfo } from "@dorahub/shared";
 
 const DAY_MS = 86_400_000;
@@ -156,7 +157,7 @@ function PiSideItem({ s, importing, imported, onImport }: {
   return (
     <div className="pi-side-item">
       <div className="pi-side-item-top">
-        <span className="pi-side-env">{s.envId}</span>
+        <span className={`pi-side-env ${envColorClass(s.envId)}`}>{s.envId}</span>
         <span className={`pi-side-title ${s.metaReady ? "" : "pending"}`} title={s.cwd}>{title}</span>
         <span className="pi-side-time">{relTime(s.mtime)}</span>
       </div>
@@ -248,7 +249,7 @@ export function PiFullModal({ executors, sessions, importedIds, onImported, onCl
       {groups.map((g) => (
         <div key={g.env} className="pi-group">
           <div className="group-label">
-            <span className="group-name">🖥 {g.env}</span>
+            <span className={`group-name ${envColorClass(g.env)} envc-text`}>🖥 {g.env}</span>
             <span className="group-count">{g.items.length} 个 pi 会话</span>
           </div>
           {g.items.map((s) => (

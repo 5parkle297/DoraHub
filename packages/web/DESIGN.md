@@ -20,6 +20,11 @@ colors:
   amber-soft: "#f5ecd3"
   indigo-annotation: "#2c5f7c"
   indigo-soft: "#e3ecf2"
+  # 设备标识色（P0-2 #2，2026-10-19）：envId 哈希分配 0-3；hub 恒定墨灰。
+  # 当前分配：workpc=envc-0(靖蓝) laptop=envc-2(琥珀)；深色模式全对自动跟随（style.css）
+  envc-1: "#266b42"        # 印绿（加深保 AA 5.43，深色用 seal-green 亮色变体）
+  envc-3: "#9c4a8a"        # 紫暮（新增，无既有对应）
+  envc-hub: "#645f53"      # 云端 hub：墨灰（text-dim 同源）
 typography:
   body:
     fontFamily: "IBM Plex Sans, Noto Sans SC, PingFang SC, Microsoft YaHei, sans-serif"

@@ -27,6 +27,19 @@ export function envLabel(envId: string | null, host?: string): string {
   return `🖥 ${envId}${host ? ` · ${host}` : ""}`;
 }
 
+/**
+ * 设备标识色（P0-2 #2，2026-10-19）：envId 确定性哈希 → envc-0..3 四色调色板；
+ * hub 恒定墨灰（云端不与任何实体机撞色）。
+ * 用法：`className={`env-badge ${envColorClass(envId)}`}`；冲突概率：同色机器 ≤ 1/4，
+ * 新机器加入不用配色自动分配。
+ */
+export function envColorClass(envId: string | null): string {
+  if (!envId || envId === "hub") return "envc-hub";
+  let h = 0;
+  for (let i = 0; i < envId.length; i++) h = (h * 31 + envId.charCodeAt(i)) >>> 0;
+  return `envc-${h % 4}`;
+}
+
 export interface SidebarData {
   convs: ConversationSummary[];
   error: string;
