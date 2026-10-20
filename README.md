@@ -29,6 +29,7 @@ laptop(PWA) ─┘   serve/TLS   pi-durable + SQLite
 | 10-19 | 交接：laptop 体验修复 | P0-1 诊断完成：空壳会话为 CreateModal 误触连创（audit 实证 4 秒 3 个）；pi 扫描无 bug 但呈现混组不分机器；handoff v4 锁死修复方向，待下会话执行 |
 | 10-19 | P0-1 修复上线 | 空壳会话治理（新建两步确认+成功关弹窗+空会话不进列表+conv_meta 补拉 upsert）；pi 扫描按执行机分组（laptop 15/workpc 30 实测）；线上空壳 177/210/217/224 全清；sw v8；handoff v5 |
 | 10-19 | P0-2 #1：pi 会话入侧栏 | IA 变更（用户拍板）：pi 会话从设置弹窗移到左侧栏常驻，自动扫描+时间窗（3天内/3-7天，每机每档3条）+「更多」全量弹窗；设置改三页签；sw v9 |
+| 10-19 | P0-2 #2：设备标识色 | 三机三色（hub 墨灰/workpc 靖蓝/laptop 琥珀）；envId 哈希分配+CSS 变量架构；AA 对比度全过；sw v10 |
 
 ## 快速开始（workpc 本地开发）
 
