@@ -1,11 +1,11 @@
 /**
- * pi CLI 会话（P0-2 #1 重构，2026-10-19）：
- * - 侧栏常驻区（SidebarSidebar）：打开即后台自动扫描所有执行机，不用点任何按钮；
- *   只展示时间窗内的：3 天内 / 3-7 天前，每机每档最多 3 条 + "更多"入口
+ * pi CLI 会话（P0-2 #1 重构，2026-10-19；#3 渐进扫描）：
+ * - 侧栏常驻区（PiSidebarSection）：打开即后台自动扫描，只展示时间窗内的
+ *   3 天内 / 3-7 天前，每机每档最多 3 条 + "更多"入口
+ * - 渐进扫描（#3）：逐台机器上屏不等最慢者；进度条 = 完成台数/总台数
  * - 全量管理弹窗（PiFullModal）：按机器分组全量列表，含导入/删除/搬运
- * - 旧入口（设置弹窗 pi 页签）已移除——挪到侧栏是用户 10-19 拍板的 IA 变更
  */
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "../api.ts";
 import { relTime } from "../util/time.ts";
 import { navigate } from "../route.ts";
@@ -15,9 +15,55 @@ import type { ExecutorInfo, PiSessionInfo } from "@dorahub/shared";
 
 const DAY_MS = 86_400_000;
 
+/**
+ * pi 扫描状态（#3 渐进式）：逐台机器独立请求，谁先回来谁先上屏；
+ * 进度 = 已完成机器数 / 总机器数。失败按空处理（静默，不阻塞进度）。
+ */
+function usePiScan(envIds: string[]) {
+  const key = envIds.join(",");
+  const [perEnv, setPerEnv] = useState<Record<string, PiSessionInfo[] | null>>({});
+
+  const scan = useCallback(
+    (reset: boolean) => {
+      if (reset) setPerEnv(Object.fromEntries(envIds.map((e) => [e, null])));
+      for (const env of envIds) {
+        api.piSessions(env)
+          .then((items) => setPerEnv((m) => ({ ...m, [env]: items })))
+          .catch(() => setPerEnv((m) => (m[env] == null ? { ...m, [env]: [] } : m)));
+      }
+    },
+    [key],
+  );
+
+  useEffect(() => { scan(true); }, [scan]);
+
+  const sessions = useMemo(() => envIds.flatMap((e) => perEnv[e] ?? []), [perEnv, key]);
+  const done = envIds.filter((e) => perEnv[e] != null).length;
+  const pendingNames = envIds.filter((e) => perEnv[e] == null);
+  const removeSession = useCallback((env: string, file: string) => {
+    setPerEnv((m) => ({ ...m, [env]: (m[env] ?? []).filter((s) => s.file !== file) }));
+  }, []);
+
+  return { sessions, done, total: envIds.length, pendingNames, scanning: done < envIds.length, scan, removeSession };
+}
+
+type ScanState = ReturnType<typeof usePiScan>;
+
+/** 扫描进度条（#3）：细条 + mono 文案，进行中语义用结构色（ink-soft），不用状态色。 */
+function ScanProgress({ done, total, names }: { done: number; total: number; names: string[] }) {
+  const pct = total ? Math.round((done / total) * 100) : 100;
+  return (
+    <div className="pi-scan">
+      <div className="pi-scan-bar"><i style={{ width: `${pct}%` }} /></div>
+      <div className="pi-scan-text">
+        扫描中 {done}/{total}{names.length > 0 ? ` · ${names.join("、")}…` : ""}
+      </div>
+    </div>
+  );
+}
+
 /** 侧栏常驻 pi 会话区：自动扫描 + 时间窗（3 天 / 3-7 天，每机每档最多 3 条）。 */
 export function PiSidebarSection({ executors }: { executors: ExecutorInfo[] }) {
-  const [sessions, setSessions] = useState<PiSessionInfo[] | null>(null); // null = 还没扫到
   const [fullOpen, setFullOpen] = useState(false);
   const [importing, setImporting] = useState<string | null>(null);
   const [confirmImport, setConfirmImport] = useState<PiSessionInfo | null>(null);
@@ -25,30 +71,18 @@ export function PiSidebarSection({ executors }: { executors: ExecutorInfo[] }) {
   const [importedIds, setImportedIds] = useState<Map<string, string>>(new Map());
 
   const envIds = useMemo(() => executors.filter((e) => e.envId !== "hub").map((e) => e.envId), [executors]);
+  const { sessions, done, total, pendingNames, scanning, scan, removeSession } = usePiScan(envIds);
 
-  // 自动扫描：executors 一到就开始（不等用户点），失败静默（侧栏不报错）
-  useEffect(() => {
-    if (envIds.length === 0) return;
-    let alive = true;
-    (async () => {
-      const results = await Promise.all(envIds.map((e) => api.piSessions(e).catch(() => [] as PiSessionInfo[])));
-      if (alive) setSessions(results.flat());
-    })();
-    return () => { alive = false; };
-  }, [envIds.join(",")]);
+  // 打开全量弹窗时静默刷新（不重置进度，已有数据不闪空）
+  useEffect(() => { if (fullOpen) scan(false); }, [fullOpen, scan]);
 
-  // 有未就绪的 meta（首次扫描后台生成中）→ 8s 轮询拉新，直到全部就绪；弹窗打开时也刷新
-  const pendingMeta = !!sessions?.some((s) => !s.metaReady);
+  // 有未就绪的 meta（首次扫描后台生成中）→ 8s 轮询拉新，直到全部就绪
+  const pendingMeta = sessions.some((s) => !s.metaReady);
   useEffect(() => {
-    if (!pendingMeta || fullOpen) return;
-    const t = setInterval(async () => {
-      if (document.hidden || envIds.length === 0) return;
-      const results = await Promise.all(envIds.map((e) => api.piSessions(e).catch(() => [] as PiSessionInfo[])));
-      setSessions((prev) => prev ?? results.flat());
-      setSessions(results.flat());
-    }, 8000);
+    if (!pendingMeta || scanning || fullOpen) return;
+    const t = setInterval(() => { if (!document.hidden) scan(false); }, 8000);
     return () => clearInterval(t);
-  }, [pendingMeta, fullOpen, envIds.join(",")]);
+  }, [pendingMeta, scanning, fullOpen, scan]);
 
   async function doImport(sess: PiSessionInfo) {
     setConfirmImport(null);
@@ -67,11 +101,11 @@ export function PiSidebarSection({ executors }: { executors: ExecutorInfo[] }) {
   // 时间窗分组：每机每档最多 3 条
   const windows = useMemo(() => {
     const now = Date.now();
-    const d3 = sessions?.filter((s) => now - s.mtime < 3 * DAY_MS) ?? [];
-    const d7 = sessions?.filter((s) => {
+    const d3 = sessions.filter((s) => now - s.mtime < 3 * DAY_MS);
+    const d7 = sessions.filter((s) => {
       const age = now - s.mtime;
       return age >= 3 * DAY_MS && age < 7 * DAY_MS;
-    }) ?? [];
+    });
     const cap = (list: PiSessionInfo[]) => {
       const byEnv = new Map<string, PiSessionInfo[]>();
       for (const s of list) {
@@ -92,32 +126,28 @@ export function PiSidebarSection({ executors }: { executors: ExecutorInfo[] }) {
         <button className="pi-side-more" onClick={() => setFullOpen(true)}>更多 →</button>
       </div>
 
-      {sessions === null ? (
-        <div className="pi-side-hint">扫描中…</div>
-      ) : (
-        <>
-          {windows.d3.length > 0 && (
-            <div className="pi-side-group">
-              <div className="pi-side-window">3 天内</div>
-              {windows.d3.map((s) => (
-                <PiSideItem key={`${s.envId}/${s.file}`} s={s} importing={importing === s.file}
-                  imported={importedIds.get(s.sessionId)} onImport={() => setConfirmImport(s)} />
-              ))}
-            </div>
-          )}
-          {windows.d7.length > 0 && (
-            <div className="pi-side-group">
-              <div className="pi-side-window">3-7 天前</div>
-              {windows.d7.map((s) => (
-                <PiSideItem key={`${s.envId}/${s.file}`} s={s} importing={importing === s.file}
-                  imported={importedIds.get(s.sessionId)} onImport={() => setConfirmImport(s)} />
-              ))}
-            </div>
-          )}
-          {windows.d3.length === 0 && windows.d7.length === 0 && (
-            <div className="pi-side-hint">最近 7 天没有 pi 会话</div>
-          )}
-        </>
+      {scanning && <ScanProgress done={done} total={total} names={pendingNames} />}
+
+      {windows.d3.length > 0 && (
+        <div className="pi-side-group">
+          <div className="pi-side-window">3 天内</div>
+          {windows.d3.map((s) => (
+            <PiSideItem key={`${s.envId}/${s.file}`} s={s} importing={importing === s.file}
+              imported={importedIds.get(s.sessionId)} onImport={() => setConfirmImport(s)} />
+          ))}
+        </div>
+      )}
+      {windows.d7.length > 0 && (
+        <div className="pi-side-group">
+          <div className="pi-side-window">3-7 天前</div>
+          {windows.d7.map((s) => (
+            <PiSideItem key={`${s.envId}/${s.file}`} s={s} importing={importing === s.file}
+              imported={importedIds.get(s.sessionId)} onImport={() => setConfirmImport(s)} />
+          ))}
+        </div>
+      )}
+      {!scanning && windows.d3.length === 0 && windows.d7.length === 0 && (
+        <div className="pi-side-hint">最近 7 天没有 pi 会话</div>
       )}
 
       {confirmImport && (
@@ -139,7 +169,7 @@ export function PiSidebarSection({ executors }: { executors: ExecutorInfo[] }) {
       {fullOpen && (
         <PiFullModal
           executors={executors}
-          sessions={sessions}
+          scanState={{ sessions, done, total, pendingNames, scanning, scan, removeSession }}
           importedIds={importedIds}
           onImported={(sid, convId) => setImportedIds((m) => new Map(m).set(sid, convId))}
           onClose={() => setFullOpen(false)}
@@ -176,29 +206,18 @@ function PiSideItem({ s, importing, imported, onImport }: {
 }
 
 /** 全量管理弹窗："更多 →" 入口。按机器分组全量列表，含导入/删除/搬运。 */
-export function PiFullModal({ executors, sessions, importedIds, onImported, onClose }: {
+export function PiFullModal({ executors, scanState, importedIds, onImported, onClose }: {
   executors: ExecutorInfo[];
-  sessions: PiSessionInfo[] | null;
+  scanState: ScanState;
   importedIds: Map<string, string>;
   onImported: (sid: string, convId: string) => void;
   onClose: () => void;
 }) {
-  const [local, setLocal] = useState<PiSessionInfo[] | null>(sessions);
+  const { sessions, done, total, pendingNames, scanning, removeSession } = scanState;
   const [importing, setImporting] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [moving, setMoving] = useState<PiSessionInfo | null>(null);
   const [error, setError] = useState("");
-
-  // 打开时重新扫一遍（拿最新）
-  const envIds = useMemo(() => executors.filter((e) => e.envId !== "hub").map((e) => e.envId), [executors]);
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      const results = await Promise.all(envIds.map((e) => api.piSessions(e).catch(() => [] as PiSessionInfo[])));
-      if (alive) setLocal(results.flat());
-    })();
-    return () => { alive = false; };
-  }, [envIds.join(",")]);
 
   async function doImport(sess: PiSessionInfo) {
     setImporting(sess.file);
@@ -220,7 +239,7 @@ export function PiFullModal({ executors, sessions, importedIds, onImported, onCl
     setError("");
     try {
       await api.piSessionDelete({ envId: sess.envId, dir: sess.dir, file: sess.file });
-      setLocal((ls) => ls?.filter((s) => s.file !== sess.file) ?? ls);
+      removeSession(sess.envId, sess.file);
     } catch (e: any) {
       setError("删除失败：" + e.message);
     } finally {
@@ -230,20 +249,20 @@ export function PiFullModal({ executors, sessions, importedIds, onImported, onCl
 
   const groups = useMemo(() => {
     const byEnv = new Map<string, PiSessionInfo[]>();
-    for (const s of local ?? []) {
+    for (const s of sessions) {
       if (!byEnv.has(s.envId)) byEnv.set(s.envId, []);
       byEnv.get(s.envId)!.push(s);
     }
     for (const list of byEnv.values()) list.sort((a, b) => b.mtime - a.mtime);
     return [...byEnv.entries()].map(([env, items]) => ({ env, items }));
-  }, [local]);
+  }, [sessions]);
 
   return (
     <Modal onClose={onClose}>
       <h3>pi 会话（全部）</h3>
-      {local === null && <div className="pi-empty">扫描中…</div>}
+      {scanning && <ScanProgress done={done} total={total} names={pendingNames} />}
       {error && <div className="pi-empty">{error}</div>}
-      {local !== null && groups.length === 0 && (
+      {!scanning && groups.length === 0 && (
         <div className="pi-empty">各台执行机上都没有 pi 会话（~/.pi/agent/sessions/ 为空）</div>
       )}
       {groups.map((g) => (

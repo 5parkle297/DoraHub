@@ -1,6 +1,6 @@
 // 极简 service worker：只缓存带 hash 的静态资产，不碰 /api、/ws、导航（06 §1）。
 // v2：修复 v1 缓存导航文档导致更新不生效的 bug——导航永远走网络。
-const CACHE = "dorahub-shell-v10";
+const CACHE = "dorahub-shell-v11";
 const SHELL = ["/", "/index.html", "/manifest.webmanifest", "/icon.svg"];
 
 self.addEventListener("install", (e) => {

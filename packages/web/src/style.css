@@ -660,6 +660,21 @@ a { color: var(--blue); }
   color: var(--text-dim); font-size: var(--fs-xs); font-family: var(--sans);
 }
 .pi-side-more:hover { color: var(--accent-text); text-decoration: underline; }
+/* 扫描进度（#3）：细条 + mono 计数；进行中用结构色不用状态色（DESIGN.md 框语义） */
+.pi-scan { padding: var(--sp-1) var(--sp-2) var(--sp-2); }
+.pi-scan-bar {
+  height: 3px; border-radius: 2px; background: var(--bg-sunken);
+  overflow: hidden;
+}
+.pi-scan-bar i {
+  display: block; height: 100%; border-radius: 2px;
+  background: var(--ink-soft);
+  transition: width 0.3s ease;
+}
+.pi-scan-text {
+  color: var(--text-faint); font-size: var(--fs-xs); font-family: var(--mono);
+  margin-top: 4px;
+}
 .pi-side-group { display: flex; flex-direction: column; gap: 4px; margin-bottom: var(--sp-2); }
 .pi-side-window {
   font-size: var(--fs-xs); color: var(--text-faint); font-family: var(--mono);
