@@ -660,21 +660,22 @@ a { color: var(--blue); }
   color: var(--text-dim); font-size: var(--fs-xs); font-family: var(--sans);
 }
 .pi-side-more:hover { color: var(--accent-text); text-decoration: underline; }
-/* 扫描进度（#3）：细条 + mono 计数；进行中用结构色不用状态色（DESIGN.md 框语义） */
-.pi-scan { padding: var(--sp-1) var(--sp-2) var(--sp-2); }
-.pi-scan-bar {
-  height: 3px; border-radius: 2px; background: var(--bg-sunken);
-  overflow: hidden;
+/* 扫描进度（#3 v2）：逐机行级状态，展示真正在扫什么/多久/结果 */
+.pi-scan { padding: var(--sp-1) var(--sp-2) var(--sp-2); display: flex; flex-direction: column; gap: 3px; }
+.pi-scan-row {
+  display: flex; align-items: baseline; gap: var(--sp-2);
+  font-size: var(--fs-xs); font-family: var(--mono);
 }
-.pi-scan-bar i {
-  display: block; height: 100%; border-radius: 2px;
-  background: var(--ink-soft);
-  transition: width 0.3s ease;
+.pi-scan-row .pi-scan-st { color: var(--green); flex: none; width: 12px; text-align: center; }
+.pi-scan-row.fail .pi-scan-st { color: var(--red); }
+.pi-scan-row .pi-scan-st.spin {
+  color: var(--text-dim); display: inline-block;
+  animation: pi-scan-spin 1.2s linear infinite;
 }
-.pi-scan-text {
-  color: var(--text-faint); font-size: var(--fs-xs); font-family: var(--mono);
-  margin-top: 4px;
-}
+@keyframes pi-scan-spin { to { transform: rotate(360deg); } }
+.pi-scan-name { font-weight: 600; }
+.pi-scan-row.fail .pi-scan-name { color: var(--text-dim); }
+.pi-scan-info { color: var(--text-faint); }
 .pi-side-group { display: flex; flex-direction: column; gap: 4px; margin-bottom: var(--sp-2); }
 .pi-side-window {
   font-size: var(--fs-xs); color: var(--text-faint); font-family: var(--mono);
