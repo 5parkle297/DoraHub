@@ -88,6 +88,7 @@ export async function importPiSession(
   const lines: ParsedLine[] = [];
   let headerCwd = "";
   let firstModel: { provider: string; modelId: string } | null = null;
+  let lastThinkingLevel: string | null = null;
   for (const line of text.split("\n")) {
     if (!line.trim()) continue;
     let o: any;
@@ -95,6 +96,9 @@ export async function importPiSession(
     if (o.type === "session") { headerCwd = String(o.cwd ?? ""); continue; }
     if (o.type === "model_change" && !firstModel && o.provider && o.modelId) {
       firstModel = { provider: String(o.provider), modelId: String(o.modelId) };
+    }
+    if (o.type === "thinking_level_change" && o.thinkingLevel) {
+      lastThinkingLevel = String(o.thinkingLevel); // 取最后一个生效档位
     }
     if (o.type !== "message" || !o.message?.role) continue;
     const role = o.message.role;
@@ -110,13 +114,30 @@ export async function importPiSession(
   if (lines.length === 0) return { ok: false, error: "no importable messages" };
 
   // 3. 建 durable 会话：init 里批量 appendEntry（一个 commit 全量写入）
-  // 模型归一（no_model 防护）：pi 本地渠道名 → hub 渠道名，归不进去就退默认
+  // 模型归一（no_model 防护）：pi 本地渠道名 → hub 渠道名，归不进去就退默认。
+  // thinkingLevel 必须跟：智谱 GLM 系列"始终思考"（错误 1210：不支持关闭思考），
+  // 无档位直接 400 model_error——2026-10-26 手机导入会话 unanswered 的根因之二。
+  // 导入时优先用 pi 侧最后的档位；归一后渠道换了/没档位时，模型要求思考则补 max。
   const cwd = headerCwd || ".";
   const agentModel = normalizeModel(firstModel, channels);
+  // 思考档位类型：pi 的 thinkingLevel 是字面量联合（off/minimal/low/medium/high/xhigh/max）
+  type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
+  let agentThinking: ThinkingLevel | null = (lastThinkingLevel as ThinkingLevel) ?? null;
+  if (agentModel) {
+    const ch = channels.find((c) => c.id === agentModel.provider);
+    const map = ch?.models.find((m) => m.id === agentModel.modelId)?.thinkingLevelMap;
+    // 档位不在新渠道支持列表里（或没有档位）但模型要求思考 → 补档
+    if (map && (!agentThinking || !(agentThinking in map) || map[agentThinking] === null)) {
+      // 选该渠道支持的最高档（low/medium/high/max 里取 map 值非 null 的最大者）
+      const order: ThinkingLevel[] = ["low", "medium", "high", "max"];
+      agentThinking = [...order].reverse().find((lv) => map[lv] != null) ?? null;
+    }
+    if (!map) agentThinking = null; // 新渠道不支持思考档，不传
+  }
   const conv = await harness.createConversation(
     {
       ownership: { kind: "ownerless" },
-      agent: { ...(agentModel ? { model: agentModel } : {}), cwd },
+      agent: { ...(agentModel ? { model: agentModel } : {}), ...(agentThinking ? { thinkingLevel: agentThinking } : {}), cwd },
       init: async (tx, conversationId) => {
         // 必须逐个 await：commit 回调要等所有 Tx 操作落定（settled before pending = 没等）
         for (const l of lines) {
