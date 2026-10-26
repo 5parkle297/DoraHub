@@ -1,58 +1,30 @@
-# DoraHub 交接文档 v5（给下一个会话：P0-2 用户口述问题清单）
+# DoraHub 交接文档 v6（给下一个会话：手机同步云端问题修复）
 
-> 写于 2026-10-19（v5）。v4 会话已完成：**P0-1 laptop 体验修复已上线**（详见 §0 修复记录）。本文档转为常规交接，§0 永远是“当前会话任务”。
-> 历史版本（v2-v4 全文）见 git 历史。
-> **历史成果速览**：M0-M4 上线——三执行机远程执行、跨机迁移、pi 会话管理中心、/model 选择器、桌面两栏+手机驾驶舱双模式、视觉系统 v3「原稿格工作台」、P0-1 修复（空壳会话治理+pi 扫描分组）。线上 https://hub.tail242752.ts.net 。
-> **本文档结构**：§0 本次任务（必读）→ §1 怎么跑 → §2 现状 → §3 API → §4 代码地图 → §5 设计约束 → §6 坑清单（24 条）→ §7 验收 → §8 发版 → §9 自由度。中长期项在 docs/roadmap.md。
+> 写于 2026-10-19（v6）。v5 会话已完成：P0-1 + P0-2 #1-#3 全部修复上线。本文档转为常规交接，§0 永远是“当前会话任务”。
+> 历史版本（v2-v5 全文）见 git 历史。
+> **历史成果速览**：M0-M4 上线——三执行机远程执行、跨机迁移、pi 会话管理中心、/model 选择器、桌面两栏+手机驾驶舱双模式、视觉系统 v3「原稿格工作台」、P0-1 修复（空壳会话治理）、P0-2 #1-3（pi 会话入侧栏/设备标识色/扫描行级进度）。线上 https://hub.tail242752.ts.net（sw v12）。
+> **本文档结构**：§0 本次任务（必读）→ §1 怎么跑 → §2 现状 → §3 API → §4 代码地图 → §5 设计约束 → §6 坑清单（27 条）→ §7 验收 → §8 发版 → §9 自由度。中长期项在 docs/roadmap.md。
 
-## 0. 本次任务：P0-2 用户口述问题清单（逐条诊断修复）
+## 0. 本次任务：修手机同步云端的问题（用户口述，待开场诊断）
 
-### ✅ P0-1【已修复上线，2026-10-19 be929eb】（保留诊断与修法，防同类问题复发）
+**用户报告（2026-10-19）**：手机上已能打开网页（驾驶舱模式，地址 https://hub.tail242752.ts.net），但存在"同步云端"问题——具体现象未述。**开场先请用户描述具体症状**：是列表不更新？消息收不到/不发回流？切换设备后会话状态不一致？还是打开就是旧数据？
 
-**问题 A（误触连建空会话）修去：**
-1. CreateModal 改两步确认：点"最近项目"只选中填入（高亮 .on），统一走底部"创建会话"按钮；输入框 Enter 同路径。**实测：3 连击误触 0 创建**
-2. **创建成功后关闭弹窗**——这是原代码的真凶级 bug：wide 模式下 Sidebar 常驻不 unmount，create 成功后弹窗不关，用户误以为没点上再点 = 4 秒连建 3 个的形态
-3. 侧栏/桌面 WelcomePane 过滤空会话（无 name 且无 lastPreview = 从未发过消息）
-4. **conv_meta 帧 upsert 补拉**：原代码只 map 不 upsert，新会话发首条消息自动命名后推帧，但不在列表里的会话（被过滤的空壳/快照后新建的）永远进不了列表——预存缺口，被过滤改动放大后修复（submit 不推帧、conv_meta 要等慢模型命名完才推，两者叠加的窗口期靠补拉全量兑冲）
+**诊断前必查的已知线索**：
+1. **SW 缓存**：手机浏览器可能被旧 service worker 钉在旧 bundle（sw v12 才有今天的侧栏 pi 区/行级进度）——先让用户彻底关 tab 重开/清站点数据，排除"旧壳"假象
+2. **WS 重连**：手机锁屏/切后台会断 WS（Tailscale VPN 也可能被杀），回前台看是否 30s 内重连（S4 语义）；degraded 轮询兑底是否生效（conn.tsx，5s 拉一次列表）
+3. **OPPO 杀后台**：tailscale status 显示 oppo-pgx110 曾离线（Android 省电策略）——VPN 被杀则一切请求超时，connbar 应显示"连接断开"状态
+4. **iOS Safari 特有**：safe-area/输入框缩放已处理（viewport-fit + 16px），但 PWA/缓存行为可能与桌面 Chrome 不同
+5. 双设备同步链路：S1（双设备同会话实时流式）当年验收过——是手机特定环境问题还是协议回归，用桌面双 tab 复现区分
 
-**问题 B（pi 扫描混组）修去：**
-1. PiSessions 按执行机分组（组头：🖥 机器名 + N 个 pi 会话；组内 mtime 倒序）。实测 laptop 15 条/workpc 30 条分组清晰
-2. 空态文案改"各台执行机上都没有 pi 会话"（不再假设"两台电脑"）
-3. shared 包新增 PiSessionInfo 类型（api.ts 内联类型缺 title/description/keywords/metaReady 四字段——预存类型不一致顺带修）
-4. 旧行内 env 徽章（.pi-env）已删（分组头取代）；CSS .pi-group 新增
+**手机实测手段**：CDP 9222 只连 workpc Chrome；手机真机无法直接 inspect。可用 vite preview + 手机访问 workpc 局域网 IP 做 dev 调试（需 --host），或靠用户口述现象 + 在线数据（hub 的 audit.jsonl / 会话列表）反推
 
-**残留数据**：线上空壳 177/210/217/224 已全部软删（2026-10-19，含 handoff 未点名的 177）。本地 dev 库空壳已清。
+### ✅ 历史已修（保留索引，详情见 git 历史）
 
-**验收实录**（全部通过）：ws-test 15/15；tsc 双包零错；impeccable detect `[]`；手机 390px 弹窗 358px 无溢出输入框 16px；新会话发消息→自动命名→侧栏实时出现（conv_meta 补拉链路）。
-
-### P0-2【逐条进行中】用户口述问题清单
-
-用户 10-19 说“今天体验发现不少问题”。已处理：
-
-**✅ #1（已上线 5c34ba2）pi 会话入口太深 + 全量扫描等待成本高**：用户拍板 IA 变更——pi 入口从 设置→pi页签→点展开 三层挪到**左侧栏常驻**：
-- 打开页面即后台自动扫描（无需点击，扫描中不阻塞，失败静默）
-- 侧栏只留时间窗内的：**3 天内 / 3-7 天前，每机每档最多 3 条**（防单机刷屏）
-- 每条带 ⤵ 快速导入（两击确认防触屏误触）；导入后变 ▶ 打开
-- **更多 →** 全量管理弹窗（按机器分组，导入/删除/搬运）
-- 设置弹窗改三页签（pi 页签移除）——注意 10-18 定的“四页签” IA 被此变更覆盖
-- 手机列表页底部同体（驾驶舱语义不变）
-- 实测：自动扫描 12 条入窗（两档x两机x封顶3）、导入 357 条 entries 无损、自动命名链路通、390px 无溢出弹窗 358px
-
-**✅ #2（已上线 77e0779）不同设备标识无区分（都是蓝框）**：设备标识色系统上线——
-- envId 确定性哈希→4 色调色板（靖蓝/印绿/琥珀/紫暮），**hub 恒定墨灰**不与实体机撞色
-- 当前分配：**workpc=靖蓝(envc-0)、laptop=琥珀(envc-2)**、hub=墨灰(envc-hub)
-- CSS 变量架构：变体类只定义 --envc-fg/--envc-bg，基类（.env-badge/.env-tag/.pi-side-env）消费变量——无特异性竞争，新机器加入自动分配不用改代码
-- 应用到全部机器标识位：ConvCard 徽章/会话页 header 标签/侧栏 pi 区/全量弹窗分组头/WelcomePane
-- 深色模式全对自动跟随；AA 对比度 10 对全过（envc-1 绿为此加深至 #266b42，5.43）
-- DESIGN.md 已补 colors 条目（envc-0..3/envc-hub）
-
-**✅ #3（已上线，v2 行级状态 260e5e7）扫描过程无进度反馈**：
-- 逐台机器独立请求，谁先回来谁先上屏（不再等最慢机器）
-- 行级状态取代无信息量的计数条：`⟳ 机器 · 预计 ~2.0s`（EWMA 历史耗时）/ `✓ 机器 · 30 个会话 · 5ms`（真实数据）/ `✕ 机器 · 连接失败`（区别于"没有会话"，不静默）
-- 超预估 2 倍提示"响应慢（可能离线）"；ETA 越用越准
-- CDP Fetch 注入实测：延迟 3s/8s/fail 三场景全过
-
-**待用户继续列**：剩余问题逐条给（哪个页面/什么操作/期望 vs 实际）。
+- **P0-1（be929eb）**：空壳会话治理（新建两步确认+成功关弹窗+空会话不进列表+conv_meta 补拉 upsert）；pi 扫描按机分组
+- **P0-2 #1（5c34ba2）**：pi 会话入侧栏常驻（自动扫描+时间窗 3天/3-7天每机每档 3 条+更多弹窗全量）；设置改三页签
+- **P0-2 #2（77e0779）**：设备标识色三机三色（hub 墨灰/workpc 靖蓝/laptop 琥珀；envId 哈希分配+CSS 变量架构；AA 全过）
+- **P0-2 #3（260e5e7）**：扫描行级进度（⟳ 预计耗时 EWMA / ✓ 真实数量+耗时 / ✕ 连接失败不静默；超预估 2 倍提示可能离线）
+- 另修：PiFullModal prop 重命名连带 bug（scan 未定义致白屏，tsc --noCheck 查不出——**发版前必须真开页面看**）；全完成+有失败时进度区误隐藏；失败误阻断 meta 轮询
 
 ### 本次任务边界
 
@@ -246,7 +218,9 @@ web/src/
 22. **vite dev 的 CSS 是 style 标签注入 + HMR 追加不替换**：多次热更新后 computed style 可能钉在旧值；验证样式结论一律用 `vite preview`（生产 build）
 23. **路由是 `#/conversations/:id`**（不是 `#/c/:id`）；手动注入 class 验证 React 渲染树外的样式时 computed bg 会误报 transparent
 24. **CDP 手机仿真后 browser-eval 连的 target 不共享 override**：scripts/mobile-emu.mjs 用独立 puppeteer 会话做 Emulation.setDeviceMetricsOverride，browser-eval（另一个 CDP 连接）里 innerWidth 仍是桌面值。手机模式的 DOM/几何断言必须在同一个 puppeteer 会话里 evaluate（mobile-emu.mjs 就是这么写的）；还原桌面跑 `node scripts/mobile-emu.mjs 1264`
-25. **本项目 tsc 有两类检查**：官方验收是 `cd packages/web && npx tsc -b --noCheck`（零错）+ `cd packages/server && npx tsc --noEmit`（零错）。**不要用 `tsc --noEmit -p .` 直查 web**——Composer/route/state 有 5 个预存错误（2026-10-19 核实 HEAD 就有），-b --noCheck 才是项目认可口径
+25. **本项目 tsc 有两类检查**：官方验收是 `cd packages/web && npx tsc -b --noCheck`（零错）+ `cd packages/server && npx tsc --noEmit`（零错）。**不要用 `tsc --noEmit -p .` 直查 web**——Composer/route/state 有 5 个预存错误（2026-10-19 核实 HEAD 就有），-b --noCheck 才是项目认可口径。**且 --noCheck 不查未定义引用**（10-19 踩：prop 重命名漏改致 ReferenceError 白屏，tsc 过了但页面白）——发版前必须真开页面看一眼
+26. **vite preview 也会被 SW 劫持**：preview 端口（4173）上打开过页面后，该 origin 注册了生产 sw.js，后续请求被旧 SW 拦截造成"build 了但页面没更新"假象（同 #17 的 dev 版）。CDP 测 preview 前先 `navigator.serviceWorker.getRegistrations()` 清掉；或换端口
+27. **CDP Fetch.enable 拦截可做真实网络注入测试**（新版 CDP 已删 Network.setRequestInterception）：`Fetch.enable + patterns` + `Fetch.continueRequest`（延迟放行）/ `Fetch.failRequest`（模拟断连）——扫描进度/重连等时序逻辑的实测利器，10-19 #3 验证全靠它
 
 ## 7. 验收基线（重设计改完必须仍然全过）
 
