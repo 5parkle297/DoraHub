@@ -326,14 +326,14 @@ export class Dorahub {
   }
 
   /** 导入 pi 会话为 durable 会话（去重后转发给 pi-import）。 */
-  async importPiSession(execRegistry: import("./exec/registry.ts").ExecRegistry, sourceEnvId: string, dir: string, file: string) {
+  async importPiSession(execRegistry: import("./exec/registry.ts").ExecRegistry, sourceEnvId: string, dir: string, file: string, channels: import("./channels.ts").ChannelConfig[] = []) {
     const { importPiSession } = await import("./pi-import.ts");
     const key = `pi:${sourceEnvId}/${file}`;
     const existing = this.findByPiSource(key);
     if (existing) {
       return { ok: true, convId: existing, existing: true } as import("./pi-import.ts").PiImportResult;
     }
-    const result = await importPiSession(this.harness, execRegistry, sourceEnvId, dir, file);
+    const result = await importPiSession(this.harness, execRegistry, sourceEnvId, dir, file, channels);
     if (result.ok && result.convId) {
       this.piSourceIndex.set(key, result.convId);
       const conv = await this.harness.conversation(result.convId as any, context);

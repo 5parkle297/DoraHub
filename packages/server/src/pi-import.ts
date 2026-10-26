@@ -18,6 +18,7 @@ import type { Harness } from "@earendil-works/pi-durable";
 import { ConvMetaDoc } from "./conv-meta.ts";
 import { context } from "./harness.ts";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
+import type { ChannelConfig } from "./channels.ts";
 
 /** 单个 pi 会话导入结果。 */
 export interface PiImportResult {
@@ -29,6 +30,40 @@ export interface PiImportResult {
   error?: string;
 }
 
+/** pi 本地渠道名 → hub 渠道名映射。
+ * pi 会话的 agent 快照里 provider 是源机 ~/.pi/agent/models.json 的渠道名
+ * （如 zhipu-glm-coding-plan），hub 云端注册的是自己的渠道（zjl/trial/plan）。
+ * 名字对不上 → 会话 no_model → 消息全部 unanswered（2026-10-26 手机实踩：
+ * 发送后红色警告“模型未应答”）。导入时把模型归一到 hub 真实存在的渠道。 */
+const PI_PROVIDER_MAP: Record<string, string> = {
+  "zhipu-glm-coding-plan": "plan",
+  "zhipu-glm-trial": "trial",
+  // zjl 两边同名，无需映射
+};
+
+/** 导入时的模型归一：provider 不在 hub 渠道里时按映射表换；
+ * 换完仍不存在（模型 id 也没有）→ 退回 null（用 hub 默认模型）。 */
+function normalizeModel(
+  model: { provider: string; modelId: string } | null,
+  channels: ChannelConfig[],
+): { provider: string; modelId: string } | null {
+  if (!model) return null;
+  const channelIds = new Set(channels.map((c) => c.id));
+  const mapped = { ...model };
+  if (!channelIds.has(mapped.provider)) {
+    const target = PI_PROVIDER_MAP[mapped.provider];
+    if (target && channelIds.has(target)) {
+      mapped.provider = target;
+    } else {
+      return null; // 无法映射：退回默认，绝不带入 hub 不认识的 provider
+    }
+  }
+  // provider 在了，确认 modelId 也存在于该渠道
+  const ch = channels.find((c) => c.id === mapped.provider);
+  if (!ch?.models.some((m) => m.id === mapped.modelId)) return null;
+  return mapped;
+}
+
 /** 导入一个 pi 会话文件为 durable 会话。 */
 export async function importPiSession(
   harness: Harness,
@@ -36,6 +71,7 @@ export async function importPiSession(
   sourceEnvId: string,
   dir: string,
   file: string,
+  channels: ChannelConfig[] = [],
 ): Promise<PiImportResult> {
   const sourceKey = `pi:${sourceEnvId}/${file}`;
 
@@ -74,11 +110,13 @@ export async function importPiSession(
   if (lines.length === 0) return { ok: false, error: "no importable messages" };
 
   // 3. 建 durable 会话：init 里批量 appendEntry（一个 commit 全量写入）
+  // 模型归一（no_model 防护）：pi 本地渠道名 → hub 渠道名，归不进去就退默认
   const cwd = headerCwd || ".";
+  const agentModel = normalizeModel(firstModel, channels);
   const conv = await harness.createConversation(
     {
       ownership: { kind: "ownerless" },
-      agent: { ...(firstModel ? { model: firstModel } : {}), cwd },
+      agent: { ...(agentModel ? { model: agentModel } : {}), cwd },
       init: async (tx, conversationId) => {
         // 必须逐个 await：commit 回调要等所有 Tx 操作落定（settled before pending = 没等）
         for (const l of lines) {

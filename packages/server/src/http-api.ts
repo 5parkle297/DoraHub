@@ -217,7 +217,7 @@ export function createRouter(deps: HttpApiDeps) {
       const { sourceEnvId, dir, file } = body;
       if (!sourceEnvId || !dir || !file) return err(res, 400, "bad_request", "sourceEnvId/dir/file required");
       try {
-        const r = await app.importPiSession(deps.execRegistry!, sourceEnvId, dir, file);
+        const r = await app.importPiSession(deps.execRegistry!, sourceEnvId, dir, file, deps.channels ?? []);
         audit.log("pi_session_import", { from: sourceEnvId, file, ok: r.ok, existing: r.existing ?? false });
         if (!r.ok) return err(res, 500, "pi_import_failed", r.error ?? "unknown");
         return json(res, 200, r);
