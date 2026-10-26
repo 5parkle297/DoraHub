@@ -420,8 +420,33 @@ export class Dorahub {
     return es.snapshot;
   }
 
-  /** attach：为订阅者打开事件流（首个订阅者时 start）。 */
-  async attach(id: string, listener: (events: AgentEvent[]) => void): Promise<AgentEvent> {
+  /** attach：为订阅者打开事件流（首个订阅者时 start）。
+   * onSnapshotCaptured：快照捕获瞬间回调（ws 层用它翻闸门：此后的事件才需要
+   * 补发给客户端——之前的事件已包含在快照里，重发会造成重复渲染）。 */
+  async attach(id: string, listener: (events: AgentEvent[]) => void, onSnapshotCaptured?: () => void): Promise<AgentEvent> {
+    // 同会话的 attach/detach 串行化：ws 层的帧处理是并发的，StrictMode 的
+    // attach→detach→attach 快速序列会交错——两个 attach 同时通过
+    // `if (!rec.stream)` 检查 → 建出两个 watchEvents 流，一个泄漏且永不停，
+    // 每批事件双份扇出（2026-10-19 手机双份消息的第二根源，间歇 2/5 复现）。
+    return this.serialize(id, () => this.doAttach(id, listener, onSnapshotCaptured));
+  }
+
+  /** per-conv 操作链（attach/detach 互斥） */
+  private opChains = new Map<string, Promise<unknown>>();
+
+  private serialize<T>(id: string, op: () => Promise<T>): Promise<T> {
+    const prev = this.opChains.get(id) ?? Promise.resolve();
+    const run = prev.then(op, op); // 前序失败不阻塞后续
+    // 链尾白满后清理；期间有新操作挂链则保留
+    const settled = run.then(() => {}, () => {});
+    this.opChains.set(id, settled);
+    settled.then(() => {
+      if (this.opChains.get(id) === settled) this.opChains.delete(id);
+    });
+    return run;
+  }
+
+  private async doAttach(id: string, listener: (events: AgentEvent[]) => void, onSnapshotCaptured?: () => void): Promise<AgentEvent> {
     const conv = this.getConv(id);
     if (!conv) throw new Error(`conversation ${id} not found`);
     const rec = this.convs.get(id)!;
@@ -453,9 +478,11 @@ export class Dorahub {
             break;
           }
         }
-        for (const l of rec.pending) {
-          try { l([...events]); } catch { /* 订阅者自己炸不管 */ }
-        }
+        // 事件只走 this.events.onEvents 总线广播一条路（ws 层按 attached 分发）。
+        // 历史 bug（2026-10-19 手机双份消息）：这里曾同时直调 rec.pending 的
+        // listener——ws 层的 listener 会 send 一帧，onEvents 广播又 send 一帧，
+        // 同一客户端每批 events 收到两份，前端 reducer 跑两遍 → 消息成双。
+        // pending 集合保留，仅作订阅计数（detach 判断何时停流）。
         this.events.onEvents(id, [...events]);
       });
       rec.stream = { stop: () => es.stop() };
@@ -464,12 +491,17 @@ export class Dorahub {
     // 重新打开流拿当前 snapshot
     const es = await watchEvents(this.harness, conv.id, context);
     const snapshot = es.snapshot;
+    onSnapshotCaptured?.(); // 此刻起的事件不在 snapshot 里，需要补发
     await es.stop();
     return snapshot;
   }
 
-  /** detach：最后一个订阅者离开时停流。 */
+  /** detach：最后一个订阅者离开时停流（与 attach 串行化，见 attach 注释）。 */
   async detach(id: string, listener: (events: AgentEvent[]) => void) {
+    return this.serialize(id, () => this.doDetach(id, listener));
+  }
+
+  private async doDetach(id: string, listener: (events: AgentEvent[]) => void) {
     const rec = this.convs.get(id);
     if (!rec) return;
     rec.pending.delete(listener);

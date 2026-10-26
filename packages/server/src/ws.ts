@@ -18,9 +18,40 @@ const HEARTBEAT_TIMEOUT_MS = 40_000;
 interface Client {
   ws: WebSocket;
   id: string;
-  /** convId -> listener（detach 用） */
-  attached: Map<string, (events: AgentEvent[]) => void>;
+  /** convId → 事件闸门（attach 时序控制；bus 分发与 detach 都经过它） */
+  attached: Map<string, EventGate>;
   alive: boolean;
+}
+
+/** attach 闸门：快照捕获前的事件已在 snapshot 里（丢）；
+ * 捕获后、snapshot 帧发出前的缓冲；发出后直投。事件全部经 bus → gate 分发。 */
+class EventGate {
+  private snapshotCaptured = false;
+  private snapshotSent = false;
+  private buffer: AgentEvent[][] = [];
+  constructor(private sendFrame: (frame: SrvFrame) => void, private convId: string) {}
+
+  /** 快照捕获瞬间（dorahub.attach 回调）——此后的事件才需要补发 */
+  markSnapshotCaptured() { this.snapshotCaptured = true; }
+
+  /** snapshot 帧已发出——flush 缓冲，后续直投 */
+  markSnapshotSent() {
+    this.snapshotSent = true;
+    while (this.buffer.length > 0) {
+      const events = this.buffer.shift()!;
+      this.sendFrame({ t: "events", conv: this.convId, events: events as any });
+    }
+  }
+
+  /** bus 分发入口（事件帧唯一路径） */
+  onEvents(events: AgentEvent[]) {
+    if (!this.snapshotCaptured) return; // 已在 snapshot 里
+    if (this.snapshotSent) {
+      this.sendFrame({ t: "events", conv: this.convId, events: events as any });
+      return;
+    }
+    this.buffer.push(events);
+  }
 }
 
 export function attachWs(server: HttpServer, app: Dorahub, audit: AuditLog) {
@@ -67,19 +98,30 @@ export function attachWs(server: HttpServer, app: Dorahub, audit: AuditLog) {
           case "attach": {
             const convId = frame.conv;
             if (client.attached.has(convId)) return; // 幂等
-            const listener = (events: AgentEvent[]) => {
-              send(client.ws, { t: "events", conv: convId, events: events as any });
-            };
-            const snapshot = await app.attach(convId, listener);
-            client.attached.set(convId, listener);
-            send(ws, { t: "snapshot", conv: convId, snapshot: snapshot as any });
+            // 先注册闸门再 attach：消除“注册前事件丢失”的空窗。
+            // 闸门时序：快照捕获前的事件已包含在 snapshot 里（丢弃，重发会造成
+            // 前端重复渲染）；捕获后、snapshot 帧发出前的缓冲；发出后直投。
+            const gate = new EventGate((frame2) => send(client.ws, frame2), convId);
+            client.attached.set(convId, gate);
+            try {
+              const snapshot = await app.attach(
+                convId,
+                (events) => gate.onEvents(events), // 订阅计数身份（bus 是唯一分发路径）
+                () => gate.markSnapshotCaptured(),
+              );
+              send(ws, { t: "snapshot", conv: convId, snapshot: snapshot as any });
+              gate.markSnapshotSent(); // ws.send FIFO：snapshot 帧先落，缓冲后发
+            } catch (e) {
+              client.attached.delete(convId); // attach 失败：撤销注册
+              throw e;
+            }
             break;
           }
           case "detach": {
-            const listener = client.attached.get(frame.conv);
-            if (listener) {
+            const gate = client.attached.get(frame.conv);
+            if (gate) {
               client.attached.delete(frame.conv);
-              await app.detach(frame.conv, listener);
+              await app.detach(frame.conv, (events) => gate.onEvents(events));
             }
             break;
           }
@@ -96,8 +138,8 @@ export function attachWs(server: HttpServer, app: Dorahub, audit: AuditLog) {
     ws.on("close", async () => {
       clients.delete(client);
       audit.log("disconnect", { client: client.id });
-      for (const [convId, listener] of client.attached) {
-        await app.detach(convId, listener).catch(() => {});
+      for (const [convId, gate] of client.attached) {
+        await app.detach(convId, (events) => gate.onEvents(events)).catch(() => {});
       }
       client.attached.clear();
     });
@@ -116,14 +158,15 @@ export function attachWs(server: HttpServer, app: Dorahub, audit: AuditLog) {
   }, HEARTBEAT_MS);
   heartbeat.unref();
 
-  // 事件扇出（Dorahub 回调）
+  // 事件扇出（Dorahub 回调）——事件帧唯一分发路径：逐客户端过闸门
   const bus = app["events"]; // Dorahub 构造注入的 events 对象
 
   return {
     /** 事件回调（DorahubEvents 实现）：发给 attach 该会话的所有客户端 */
     onEvents(conv: string, events: AgentEvent[]) {
       for (const client of clients) {
-        if (client.attached.has(conv)) send(client.ws, { t: "events", conv, events: events as any });
+        const gate = client.attached.get(conv);
+        if (gate) gate.onEvents(events);
       }
     },
     onStatus(conv: string, status: "running" | "idle") {

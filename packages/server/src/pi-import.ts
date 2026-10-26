@@ -106,6 +106,12 @@ export async function importPiSession(
     return tx.doc(ConvMetaDoc, conv.id).then((draft) => {
       draft.sourcePiKey = sourceKey;
       draft.sourcePiEnvId = sourceEnvId;
+      // 导入会话的执行机 = 源机：cwd 是源机上的真实路径，必须在源机上跑。
+      // 历史bug（2026-10-19 手机导入会话工具全炸）：漏写 envId → 会话跑在 hub
+      // 本地，cwd 却是源机的 Windows 路径 → hub 上不存在 → “Working directory
+      // does not exist: /opt/dorahub/D:/...”双重拼接鬼路径。Pi 会话从哪台机
+      // 扫来的就落哪台机。
+      draft.envId = sourceEnvId;
     });
   }, context);
 
