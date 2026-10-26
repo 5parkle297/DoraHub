@@ -1,45 +1,28 @@
-# DoraHub 交接文档 v6（给下一个会话：手机同步云端问题修复）
+# DoraHub 交接文档 v7（给下一个会话）
 
-> 写于 2026-10-19（v6）。v5 会话已完成：P0-1 + P0-2 #1-#3 全部修复上线。本文档转为常规交接，§0 永远是“当前会话任务”。
-> 历史版本（v2-v5 全文）见 git 历史。
-> **历史成果速览**：M0-M4 上线——三执行机远程执行、跨机迁移、pi 会话管理中心、/model 选择器、桌面两栏+手机驾驶舱双模式、视觉系统 v3「原稿格工作台」、P0-1 修复（空壳会话治理）、P0-2 #1-3（pi 会话入侧栏/设备标识色/扫描行级进度）。线上 https://hub.tail242752.ts.net（sw v12）。
-> **本文档结构**：§0 本次任务（必读）→ §1 怎么跑 → §2 现状 → §3 API → §4 代码地图 → §5 设计约束 → §6 坑清单（27 条）→ §7 验收 → §8 发版 → §9 自由度。中长期项在 docs/roadmap.md。
+> 写于 2026-10-26（v7）。v6 会话已完成：手机同步云端三大问题修复上线（双份消息双扇出 + attach 竞态 + pi 导入漏 envId）。
+> 历史版本（v2-v6 全文）见 git 历史。
+> **历史成果速览**：M0-M4 上线——三执行机远程执行、跨机迁移、pi 会话管理中心、/model 选择器、桌面两栏+手机驾驶舱双模式、视觉系统 v3「原稿格工作台」、P0-1（空壳会话治理）、P0-2 #1-3（pi 会话入侧栏/设备标识色/扫描行级进度）、10-26 手机同步修复（b472d22）。线上 https://hub.tail242752.ts.net（sw v12）。
+> **本文档结构**：§0 本次任务（必读）→ §1 怎么跑 → §2 现状 → §3 API → §4 代码地图 → §5 设计约束 → §6 坑清单（33 条）→ §7 验收 → §8 发版 → §9 自由度。中长期项在 docs/roadmap.md。
 
-## 0. 本次任务：修手机同步云端的问题（用户口述，待开场诊断）
+## 0. 本次任务：无待办（v7 为修复完成态）
 
-**用户报告（2026-10-19）**：手机上已能打开网页（驾驶舱模式，地址 https://hub.tail242752.ts.net），但存在"同步云端"问题——具体现象未述。**开场先请用户描述具体症状**：是列表不更新？消息收不到/不发回流？切换设备后会话状态不一致？还是打开就是旧数据？
+**v6 任务（手机同步云端问题）已全部修复并上线**（2026-10-26，commit b472d22）：
 
-**诊断前必查的已知线索**：
-1. **SW 缓存**：手机浏览器可能被旧 service worker 钉在旧 bundle（sw v12 才有今天的侧栏 pi 区/行级进度）——先让用户彻底关 tab 重开/清站点数据，排除"旧壳"假象
-2. **WS 重连**：手机锁屏/切后台会断 WS（Tailscale VPN 也可能被杀），回前台看是否 30s 内重连（S4 语义）；degraded 轮询兑底是否生效（conn.tsx，5s 拉一次列表）
-3. **OPPO 杀后台**：tailscale status 显示 oppo-pgx110 曾离线（Android 省电策略）——VPN 被杀则一切请求超时，connbar 应显示"连接断开"状态
-4. **iOS Safari 特有**：safe-area/输入框缩放已处理（viewport-fit + 16px），但 PWA/缓存行为可能与桌面 Chrome 不同
-5. 双设备同步链路：S1（双设备同会话实时流式）当年验收过——是手机特定环境问题还是协议回归，用桌面双 tab 复现区分
+- **双份消息（Bug A）**：两处根因都修了——① Dorahub.attach 流回调同时直调 rec.pending listener 和 onEvents 总线（双扇出，每批 events 两帧）；② ws 层帧处理并发，StrictMode 的 attach→detach→attach 交错便两个 watchEvents 流同时建立（间歇 2/5 复现，流泄漏）。修复：事件帧单一总线路径 + per-conv opChains 串行化 + EventGate 快照时序闸门
+- **工具环境损坏（Bug B）**：pi-import 漏写 envId，导入会话跑 hub 本地但 cwd 是源机 Windows 路径 → “/opt/dorahub/D:/...”鬼路径。修复：draft.envId = sourceEnvId；存量会话 294 已手工 configure 修正
+- 验证：ws-test 15/15、StrictMode 序列 10/10、双客户端不丢不重、E2E 桌面+手机消息单份、线上 bash hostname 真实返回 cyq
 
-**手机实测手段**：CDP 9222 只连 workpc Chrome；手机真机无法直接 inspect。可用 vite preview + 手机访问 workpc 局域网 IP 做 dev 调试（需 --host），或靠用户口述现象 + 在线数据（hub 的 audit.jsonl / 会话列表）反推
+**下会话候选方向**（用户没定就问）：① roadmap 的多用户隔离前置（同事接入前）；② 手机端体验打磨（驾驶舱模式目前无管理功能）；③ 坑清单 #28-33 的测试盲区补齐（见 §6）
 
 ### ✅ 历史已修（保留索引，详情见 git 历史）
 
+- **手机同步三修复（b472d22）**：双扇出/attach 竞态/EventGate 闸门/pi 导入 envId——详见 §6 #28-33 与 git 历史
 - **P0-1（be929eb）**：空壳会话治理（新建两步确认+成功关弹窗+空会话不进列表+conv_meta 补拉 upsert）；pi 扫描按机分组
 - **P0-2 #1（5c34ba2）**：pi 会话入侧栏常驻（自动扫描+时间窗 3天/3-7天每机每档 3 条+更多弹窗全量）；设置改三页签
 - **P0-2 #2（77e0779）**：设备标识色三机三色（hub 墨灰/workpc 靖蓝/laptop 琥珀；envId 哈希分配+CSS 变量架构；AA 全过）
 - **P0-2 #3（260e5e7）**：扫描行级进度（⟳ 预计耗时 EWMA / ✓ 真实数量+耗时 / ✕ 连接失败不静默；超预估 2 倍提示可能离线）
 - 另修：PiFullModal prop 重命名连带 bug（scan 未定义致白屏，tsc --noCheck 查不出——**发版前必须真开页面看**）；全完成+有失败时进度区误隐藏；失败误阻断 meta 轮询
-
-### 本次任务边界
-
-- 这是修 bug/体验会话，不是重设计会话：视觉系统 v3.2（蓝色版）保持不动，修问题不得推翻 DESIGN.md 世界观；确需动样式时遵循现有 token
-- 修完必须过 §7 验收基线（特别是 S5 自动命名、S9 双模式、S10 detect 清零）
-- 后端可以小改（如空会话过滤需要列表 API 配合），协议大改不做
-
-### 产品真相（2026-10-19 用户拍板，PRODUCT.md / init 问题可直接引用）
-
-- **用户与阶段**：当前 single-player；近期 = 邀请制小团队共享同一个 hub 实例（≤3 人，Tailscale 免费版上限）；远期 = 开源 self-hosted 应用（类 Gitea，每团队一台实例，docker compose 一键起）。**永不做多租户 SaaS**
-- **身份**：每人自己注册 Tailscale 账号、自己管自己设备，被邀请进 tailnet；hub 靠 serve 注入的 `Tailscale-User-Login` 头识别用户（无注册流、无密码）
-- **隔离**：会话按 owner 隔离（只能看到自己的云端会话）；执行机是资源边界——他人会话默认只能跑 hub，不能用你的 workpc/laptop；想加自己的机器当执行机自愿注册
-- **模型 key = BYOK**：同事在设置里填自己的 provider + key，不用你的 key，你也不替任何人付钱
-- **前端注意**：UI 重设计要给“未来身份”留口子（header 能容纳用户名/头像，设置弹窗留"模型渠道/账号"分组可放 BYOK 表单），但**本次不做登录页、不做用户切换**
-- **后置 milestone（不在本次范围，完整方案见 docs/roadmap.md §1）**：多用户隔离（同事接入前的前置）——身份中间件/owner/过滤/执行机边界/BYOK/ACL 收紧等，全部 UI 稳定后由后端会话做。前端本次只需：布局不焊死 single-player（header 能容纳用户名，设置能加"我的渠道"页签）
 
 ## 1. 开发环境（workpc，Windows）
 
@@ -221,6 +204,12 @@ web/src/
 25. **本项目 tsc 有两类检查**：官方验收是 `cd packages/web && npx tsc -b --noCheck`（零错）+ `cd packages/server && npx tsc --noEmit`（零错）。**不要用 `tsc --noEmit -p .` 直查 web**——Composer/route/state 有 5 个预存错误（2026-10-19 核实 HEAD 就有），-b --noCheck 才是项目认可口径。**且 --noCheck 不查未定义引用**（10-19 踩：prop 重命名漏改致 ReferenceError 白屏，tsc 过了但页面白）——发版前必须真开页面看一眼
 26. **vite preview 也会被 SW 劫持**：preview 端口（4173）上打开过页面后，该 origin 注册了生产 sw.js，后续请求被旧 SW 拦截造成"build 了但页面没更新"假象（同 #17 的 dev 版）。CDP 测 preview 前先 `navigator.serviceWorker.getRegistrations()` 清掉；或换端口
 27. **CDP Fetch.enable 拦截可做真实网络注入测试**（新版 CDP 已删 Network.setRequestInterception）：`Fetch.enable + patterns` + `Fetch.continueRequest`（延迟放行）/ `Fetch.failRequest`（模拟断连）——扫描进度/重连等时序逻辑的实测利器，10-19 #3 验证全靠它
+28. **ws.on("message") 注册两次会把每帧记两遍**（10-26 踩）：验证脚本里等待两个阶段各注册一次 handler，frames 数组每帧 x2，误判“双扇出未修”。写 WS 测试脚本时 handler 只注册一次，或先定义后复用
+29. **ws 层帧处理是并发的，不是队列**（10-26 实锤）：`ws.on("message", async ...)` 多帧同时到达时 handler 并发执行——同一会话的 attach/detach 会交错，Dorahub 里的流管理必须串行化（opChains per-conv promise 链，b472d22）。间歇性竞态（2/5 复现）必须连续跑 ≥10 次才能确认修好
+30. **服务端数据是“真相”，前端渲染是“表象”**（10-26 方法论）：排查同步问题先查 `/api/conversations/:id/snapshot` 的 entries 是否真重复——服务端干净则是传输/渲染层问题（这次双扇出）；服务端就重复才是提交层问题。别被表象带偏方向
+31. **浏览器 E2E 测试里 evaluateOnNewDocument 劫持 WebSocket 会半失败**（10-26 踩）：extends 子类覆盖 constructor 后 addEventListener 的 message 事件可能不触发（收到 undefined 帧），观测 WS 帧用 CDP `Network.webSocketFrameSent/Received` 才可靠（e2e-final.mjs 的做法）
+32. **puppeteer emulateMediaType("dark") 已废弃**：用 `page.emulateMediaFeatures([{ name: "prefers-color-scheme", value: "dark" }])`，深色截图用这个
+33. **测试脚本里的 `wait()` 若接收的是数组快照（filter/map 结果），后续新增帧不会出现**（10-26 踩）：wait 轮询的必须是原始可变数组引用，或每次轮询重新 filter。场景3 误报“零投递”就是这么来的
 
 ## 7. 验收基线（重设计改完必须仍然全过）
 
