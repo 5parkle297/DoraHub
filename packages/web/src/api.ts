@@ -57,7 +57,7 @@ export const api = {
     call<import("@dorahub/shared").PiSessionInfo[]>(`/api/pi-sessions?env=${encodeURIComponent(env)}`),
 
   piSessionImport: (req: { sourceEnvId: string; dir: string; file: string }) =>
-    call<{ ok: true; convId: string; existing: boolean; imported: number }>("/api/pi-sessions/import", {
+    call<{ ok: true; convId: string; existing: boolean; imported: number; warning?: string }>("/api/pi-sessions/import", {
       method: "POST",
       body: JSON.stringify(req),
     }),
@@ -88,6 +88,9 @@ export const api = {
 
   deleteConversation: (conv: string) =>
     call<{ ok: true }>(`/api/conversations/${encodeURIComponent(conv)}`, { method: "DELETE" }),
+
+  markRead: (conv: string) =>
+    call<{ ok: true }>(`/api/conversations/${encodeURIComponent(conv)}/read`, { method: "POST" }),
 
   pendingConfirmations: () => call<any[]>("/api/confirmations"),
 

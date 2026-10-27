@@ -125,6 +125,11 @@ export function attachWs(server: HttpServer, app: Dorahub, audit: AuditLog) {
             }
             break;
           }
+          case "read": {
+            // 标记已读（P0-1）：广播给所有设备（conv_read 帧）
+            app.markRead(frame.conv);
+            break;
+          }
           default:
             send(ws, { t: "error", message: `unknown frame ${frame}` });
         }
@@ -183,6 +188,15 @@ export function attachWs(server: HttpServer, app: Dorahub, audit: AuditLog) {
     },
     onConfirmationResolved(conv: string, id: string, approved: boolean) {
       const frame: SrvFrame = { t: "confirm_resolved", conv, id, approved };
+      for (const client of clients) send(client.ws, frame);
+    },
+    onRead(conv: string) {
+      const frame: SrvFrame = { t: "conv_read", conv };
+      for (const client of clients) send(client.ws, frame);
+    },
+    onAttention(conv: string, pending: number) {
+      // 广播给所有连接（不要求 attach）：列表页的手机也能实时看到「等你 N」变化
+      const frame: SrvFrame = { t: "attention", conv, pending };
       for (const client of clients) send(client.ws, frame);
     },
     close() {

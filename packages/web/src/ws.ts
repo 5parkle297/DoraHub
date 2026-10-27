@@ -44,11 +44,21 @@ class WsClient {
       for (const conv of this.attached) {
         this.send({ t: "attach", conv });
       }
+      // 重连后补发未途的 read（P0-1：断线期间标记的已读不能丢）
+      for (const conv of this.readQueued) {
+        this.send({ t: "read", conv });
+      }
     };
     ws.onmessage = (ev) => {
       try {
         const frame = JSON.parse(ev.data) as SrvFrame;
         for (const l of this.listeners) l.onFrame?.(frame);
+        // read 帧被服务端确认收到后才能从补发队列清除
+        if (frame.t === "conv_read") {
+          for (const conv of [...this.readQueued]) {
+            if (conv === frame.conv) this.readQueued.delete(conv);
+          }
+        }
       } catch { /* 忽略坏帧 */ }
     };
     ws.onclose = () => {
@@ -76,10 +86,13 @@ class WsClient {
   send(frame: CliFrame) {
     if (frame.t === "attach") this.attached.add(frame.conv);
     if (frame.t === "detach") this.attached.delete(frame.conv);
+    if (frame.t === "read") this.readQueued.add(frame.conv); // 未发出的 read 重连后补发
     if (this.ws?.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(frame));
     }
   }
+
+  private readQueued = new Set<string>();
 
   close() {
     this.manualClose = true;

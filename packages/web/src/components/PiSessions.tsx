@@ -146,6 +146,8 @@ export function PiSidebarSection({ executors }: { executors: ExecutorInfo[] }) {
   const [confirmImport, setConfirmImport] = useState<PiSessionInfo | null>(null);
   /** 已导入的 pi 会话：sessionId -> durable convId */
   const [importedIds, setImportedIds] = useState<Map<string, string>>(new Map());
+  /** 导入成功但模型被归一/降级的警告（P0-5 冒烟验证） */
+  const [importWarning, setImportWarning] = useState<string | null>(null);
 
   const envIds = useMemo(() => executors.filter((e) => e.envId !== "hub").map((e) => e.envId), [executors]);
   const { sessions, done, scanState, etas, scanning, scan: scanFn, removeSession } = usePiScan(envIds);
@@ -167,7 +169,13 @@ export function PiSidebarSection({ executors }: { executors: ExecutorInfo[] }) {
     try {
       const r = await api.piSessionImport({ sourceEnvId: sess.envId, dir: sess.dir, file: sess.file });
       setImportedIds((m) => new Map(m).set(sess.sessionId, r.convId));
-      if (!r.existing) navigate({ page: "conversation", id: r.convId });
+      if (r.warning) {
+        // 模型被归一/降级（P0-5）：显式警告，不自动跳转——用户需要看到
+        // 「当前用什么模型」再决定要不要切，直接跳进会话发消息会 unanswered
+        setImportWarning(r.warning);
+      } else if (!r.existing) {
+        navigate({ page: "conversation", id: r.convId });
+      }
     } catch {
       setConfirmImport(sess); // 失败退回确认态，用户可重试
     } finally {
@@ -202,6 +210,31 @@ export function PiSidebarSection({ executors }: { executors: ExecutorInfo[] }) {
         <span>电脑上的 pi 会话</span>
         <button className="pi-side-more" onClick={() => setFullOpen(true)}>更多 →</button>
       </div>
+
+      {/* 导入警告（P0-5 冒烟验证）：模型被归一/降级时显式提示，点击跳入会话让用户自己切模型 */}
+      {importWarning && (
+        <div className="env-warning" role="alert">
+          {importWarning}{" "}
+          <button
+            className="btn ghost"
+            style={{ padding: "2px 10px", fontSize: "var(--fs-xs)" }}
+            onClick={() => {
+              const cid = [...importedIds.values()][importedIds.size - 1];
+              setImportWarning(null);
+              if (cid) navigate({ page: "conversation", id: cid });
+            }}
+          >
+            打开会话 →
+          </button>{" "}
+          <button
+            className="btn ghost"
+            style={{ padding: "2px 10px", fontSize: "var(--fs-xs)" }}
+            onClick={() => setImportWarning(null)}
+          >
+            知道了
+          </button>
+        </div>
+      )}
 
       {scanning && <ScanProgress scanState={scanState} etas={etas} />}
 
@@ -302,7 +335,12 @@ export function PiFullModal({ executors, scan, importedIds, onImported, onClose 
     try {
       const r = await api.piSessionImport({ sourceEnvId: sess.envId, dir: sess.dir, file: sess.file });
       onImported(sess.sessionId, r.convId);
-      if (!r.existing) navigate({ page: "conversation", id: r.convId });
+      if (r.warning) {
+        // P0-5：模型被归一/降级 → 显示警告但不跳转，用户决定是否切模型后再进
+        setError(r.warning);
+      } else if (!r.existing) {
+        navigate({ page: "conversation", id: r.convId });
+      }
     } catch (e: any) {
       setError("导入失败：" + e.message);
     } finally {

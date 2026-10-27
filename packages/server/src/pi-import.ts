@@ -28,6 +28,10 @@ export interface PiImportResult {
   existing?: boolean;
   imported?: number;
   error?: string;
+  /** 导入成功但模型被归一/降级的警告（冒烟验证，P0-5）：
+   * 原渠道不存在/模型不在/思考档位不兼容 → 告诉用户当前用什么模型，避免
+   * 「导入成功但一发消息就 unanswered」的隐性坏状态（2026-10-26 四连 bug 的教训） */
+  warning?: string;
 }
 
 /** pi 本地渠道名 → hub 渠道名映射。
@@ -120,6 +124,18 @@ export async function importPiSession(
   // 导入时优先用 pi 侧最后的档位；归一后渠道换了/没档位时，模型要求思考则补 max。
   const cwd = headerCwd || ".";
   const agentModel = normalizeModel(firstModel, channels);
+  // 冒烟警告（P0-5）：源会话的模型不能在 hub 复原时，必须告诉用户降级到了什么。
+  // 导入完成 ≠ 能继续对话；这里不提示，用户第一次发消息才会发现 unanswered。
+  const warnings: string[] = [];
+  if (firstModel && !agentModel) {
+    warnings.push(
+      `原会话模型 ${firstModel.provider}/${firstModel.modelId} 在 hub 不存在，已改用默认模型——发消息前建议先切换模型`,
+    );
+  } else if (firstModel && (agentModel!.provider !== firstModel.provider || agentModel!.modelId !== firstModel.modelId)) {
+    warnings.push(
+      `原会话模型 ${firstModel.provider}/${firstModel.modelId} 已归一为 ${agentModel!.provider}/${agentModel!.modelId}`,
+    );
+  }
   // 思考档位类型：pi 的 thinkingLevel 是字面量联合（off/minimal/low/medium/high/xhigh/max）
   type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
   let agentThinking: ThinkingLevel | null = (lastThinkingLevel as ThinkingLevel) ?? null;
@@ -174,5 +190,5 @@ export async function importPiSession(
     });
   }, context);
 
-  return { ok: true, convId: String(conv.id), imported: lines.length };
+  return { ok: true, convId: String(conv.id), imported: lines.length, ...(warnings.length ? { warning: warnings.join("；") } : {}) };
 }

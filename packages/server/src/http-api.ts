@@ -172,6 +172,12 @@ export function createRouter(deps: HttpApiDeps) {
         return json(res, 200, { id: String(forked.id) });
       }
 
+      if (sub === "read" && method === "POST") {
+        // 标记已读（P0-1）：清除 unread + 广播 conv_read（HTTP 兜底路径，WS 也有 read 帧）
+        app.markRead(convId);
+        return json(res, 200, { ok: true });
+      }
+
       if (sub === "") {
         return err(res, 405, "method_not_allowed", `unsupported ${method}`);
       }

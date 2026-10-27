@@ -888,6 +888,127 @@ a { color: var(--blue); }
 .pi-move.danger:hover { color: var(--red); border-color: var(--red); background: var(--red-soft); }
 .pi-move:disabled { opacity: 0.5; cursor: default; }
 
+/* ---- 参考项目对齐 P0 批次（2026-10-28，视觉 v3.2 token 体系内） ---- */
+
+/* 等你处理 / 运行中 状态区（侧栏列表顶部平铺区，P0-1） */
+.state-section { margin-bottom: var(--sp-2); }
+.state-waiting .group-label .state-waiting-label { color: var(--yellow); }
+.state-running .group-label .state-running-label { color: var(--blue); }
+
+/* 会话卡未读点（P0-1）：右侧小圆点（blue，与运行徽章同色系） */
+.unread-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--blue); flex: none;
+  animation: pulse 1.5s infinite;
+}
+.conv-item.conv-unread .conv-name { color: var(--text); font-weight: 700; }
+
+/* 等你徽章（P0-1/P0-2）：amber */
+.badge-waiting {
+  color: var(--yellow); background: var(--yellow-soft);
+  font-size: var(--fs-xs); font-weight: 600; font-family: var(--mono);
+  border-radius: var(--r-sm); padding: 1px 7px; flex: none;
+}
+
+/* 「等你处理」聚合入口（P0-2）：header 徽章按钮 + 弹出列表 */
+.needs-you-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--bg-raised); color: var(--text-dim);
+  border: 1.5px solid var(--border); border-radius: var(--r-sm);
+  font-family: var(--sans); font-size: var(--fs-sm); font-weight: 600;
+  padding: 4px 10px; cursor: pointer; transition: all 0.12s;
+}
+.needs-you-btn.has-items {
+  color: var(--yellow); border-color: var(--yellow); background: var(--yellow-soft);
+}
+.needs-you-btn:hover { box-shadow: var(--shadow-1); }
+.needs-you-count {
+  background: var(--yellow); color: var(--bg-raised);
+  border-radius: 999px; min-width: 18px; height: 18px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-family: var(--mono); font-size: var(--fs-xs); font-weight: 700; padding: 0 5px;
+}
+.needs-you-pop {
+  position: fixed; top: 56px; left: 12px; z-index: 60;
+  background: var(--bg-raised); border-radius: var(--r-md);
+  border: 1.5px solid var(--border); box-shadow: var(--shadow-pop);
+  min-width: 260px; max-width: 340px; max-height: 70vh; overflow-y: auto;
+  padding: var(--sp-2);
+}
+.needs-you-head {
+  font-size: var(--fs-sm); font-weight: 700; color: var(--text);
+  padding: var(--sp-2) var(--sp-2) var(--sp-1);
+  border-bottom: 1px solid var(--border); margin-bottom: var(--sp-1);
+}
+.needs-you-empty { color: var(--text-faint); font-size: var(--fs-sm); padding: var(--sp-3) var(--sp-2); text-align: center; }
+.needs-you-item {
+  display: flex; flex-direction: column; gap: 2px; width: 100%;
+  background: transparent; border: none; border-radius: var(--r-sm);
+  padding: var(--sp-2); cursor: pointer; text-align: left;
+  font-family: var(--sans);
+}
+.needs-you-item:hover { background: var(--bg-hover); }
+.needs-you-item-name { font-weight: 600; color: var(--text); font-size: var(--fs-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.needs-you-item-meta { color: var(--yellow); font-size: var(--fs-xs); font-family: var(--mono); }
+
+/* 收尾汇报卡（P0-3）：消息流末尾的确定性总结卡 */
+.run-report {
+  margin: var(--sp-3) 0 var(--sp-4);
+  background: var(--bg-raised); border-radius: var(--r-md);
+  border: 1.5px solid var(--border);
+  padding: var(--sp-3) var(--sp-4);
+  box-shadow: var(--shadow-1);
+  /* tone 用图标色区分，不用左侧色条（side-tab 是 AI 味反模式） */
+}
+.run-report.run-done .run-report-icon { color: var(--green); }
+.run-report.run-attention .run-report-icon { color: var(--yellow); }
+.run-report.run-failed .run-report-icon { color: var(--red); }
+.run-report-head { display: flex; align-items: center; gap: var(--sp-2); }
+.run-report-title { font-weight: 700; font-size: var(--fs-md); color: var(--text); }
+.run-report.run-done .run-report-title { color: var(--green); }
+.run-report.run-attention .run-report-title { color: var(--yellow); }
+.run-report.run-failed .run-report-title { color: var(--red); }
+.run-report-time { margin-left: auto; color: var(--text-faint); font-family: var(--mono); font-size: var(--fs-xs); }
+.run-report-conclusion {
+  color: var(--text-dim); font-size: var(--fs-sm); margin-top: var(--sp-2); line-height: 1.6;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.run-report-facts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: var(--sp-2); }
+.run-report-fact {
+  color: var(--text-faint); font-family: var(--mono); font-size: var(--fs-xs);
+  border: 1px solid var(--border); border-radius: var(--r-sm); padding: 1px 7px;
+}
+.run-report-needs { color: var(--yellow); font-size: var(--fs-sm); font-weight: 600; margin-top: var(--sp-2); }
+
+/* 零会话空态行动指引（P0-6） */
+.welcome-first-steps {
+  margin-top: var(--sp-5); width: min(420px, 90%);
+  display: flex; flex-direction: column; gap: var(--sp-2);
+}
+.welcome-steps-title {
+  color: var(--text-faint); font-size: var(--fs-xs); text-transform: uppercase;
+  letter-spacing: 0.08em; font-family: var(--mono); text-align: left;
+}
+.welcome-step {
+  display: flex; align-items: center; gap: var(--sp-3);
+  background: var(--bg-raised); border-radius: var(--r-md);
+  border: 1.5px solid var(--border);
+  padding: var(--sp-3) var(--sp-4); cursor: pointer; text-align: left;
+  font-family: var(--sans); box-shadow: var(--shadow-1);
+  transition: box-shadow 0.12s, background 0.12s;
+}
+.welcome-step:hover { box-shadow: var(--shadow-2); background: var(--bg-hover); }
+.welcome-step-num {
+  width: 26px; height: 26px; flex: none;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 50%; border: 1.5px solid var(--accent);
+  color: var(--accent-text); font-family: var(--mono); font-weight: 700; font-size: var(--fs-sm);
+}
+.welcome-step-body { display: flex; flex-direction: column; gap: 2px; }
+.welcome-step-body strong { color: var(--text); font-size: var(--fs-md); font-weight: 600; }
+.welcome-step-body span { color: var(--text-dim); font-size: var(--fs-sm); }
+.welcome-step-hint { color: var(--text-faint); font-size: var(--fs-sm); line-height: 1.6; text-align: left; }
+
 /* ---- 动效偏好 ---- */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

@@ -25,6 +25,10 @@ export interface ConversationSummary {
   keywords: string[];
   /** 执行机（M4；null/"hub" = hub 本地） */
   envId: string | null;
+  /** 未读（有新动静但用户没打开过；对齐 Sig 参考项目 P0-1） */
+  unread: boolean;
+  /** 等你处理的确认卡数（服务端从确认队列派生，P0-2） */
+  pendingConfirms: number;
 }
 
 export interface CreateConversationRequest {
@@ -118,6 +122,8 @@ export type SrvFrame =
   | { t: "events"; conv: string; events: AgentEventLike[] }
   | { t: "conv_status"; conv: string; status: "running" | "idle" }
   | { t: "conv_meta"; conv: string; name: string; description: string | null; keywords: string[]; envId: string | null }
+  | { t: "conv_read"; conv: string } // 未读清除广播（P0-1，所有设备同步）
+  | { t: "attention"; conv: string; pending: number } // 会话等你处理数变化（P0-2，不 attach 也能收到）
   | { t: "confirmation"; conv: string; confirm: ConfirmationItem }
   | { t: "confirm_resolved"; conv: string; id: string; approved: boolean }
   | { t: "pong" }
@@ -127,6 +133,7 @@ export type SrvFrame =
 export type CliFrame =
   | { t: "attach"; conv: string }
   | { t: "detach"; conv: string }
+  | { t: "read"; conv: string } // 标记已读（清除 unread，P0-1）
   | { t: "ping" };
 
 // ============ exec-agent 帧（M4，07 §3） ============

@@ -38,10 +38,43 @@ export interface ConvState {
   usage: any;
   /** 渠道故障警告（auto_retry / task_failed / unanswered） */
   alert: { kind: "retry" | "failed" | "unanswered"; text: string; at: number } | null;
+  /** 最近一轮收尾汇报（P0-3，确定性生成不调 LLM；null = 尚无） */
+  lastRunReport: RunReport | null;
+  /** 本轮运行统计（run_start 重置，run_end 消费成 lastRunReport） */
+  runStats?: RunStats;
+}
+
+/** 一轮运行的收尾汇报（P0-3：对齐参考项目三段式，纯事件统计）。 */
+export interface RunReport {
+  /** 运行结束时间 */
+  at: number;
+  /** tone：完成（无错误）/ 注意（有错误工具或重试）/ 失败（task_failed / unanswered） */
+  tone: "done" | "attention" | "failed";
+  /** 本轮工具调用总数 */
+  toolCalls: number;
+  /** 出错的工具调用数 */
+  toolErrors: number;
+  /** 本轮 assistant 消息数 */
+  replies: number;
+  /** 本轮用户消息数（steer 也算） */
+  userInputs: number;
+  /** 最后一条 assistant 文本预览（结论行） */
+  lastText: string;
+  /** 耗时（ms，run_start 到 run_end） */
+  durationMs: number;
+}
+
+interface RunStats {
+  startedAt: number;
+  toolCalls: number;
+  toolErrors: number;
+  replies: number;
+  userInputs: number;
+  lastText: string;
 }
 
 export function initialConvState(): ConvState {
-  return { entries: [], tools: new Map(), inbox: [], status: "idle", usage: null, alert: null };
+  return { entries: [], tools: new Map(), inbox: [], status: "idle", usage: null, alert: null, lastRunReport: null };
 }
 
 /** watchEvents snapshot 事件 → 状态。 */
@@ -52,6 +85,8 @@ export function applySnapshot(state: ConvState, snap: AgentEventLike): ConvState
     inbox: (snap.inbox as any[] ?? []).map((i) => ({ id: String(i.id), mode: String(i.mode) })),
     status: state.status,
     usage: snap.usage ?? null,
+    alert: null,
+    lastRunReport: state.lastRunReport, // snapshot 重拉不丢收尾卡（断线重连场景）
   };
 
   // entries：pi.user / pi.system / pi.assistant / pi.tool-result
@@ -156,17 +191,38 @@ function pushEntry(state: ConvState, raw: any) {
 
 /** 增量事件批 → 状态（05 §2 reducer 对照表）。 */
 export function applyEvents(state: ConvState, events: AgentEventLike[]): ConvState {
-  const next: ConvState = { ...state, tools: new Map(state.tools), entries: [...state.entries], inbox: [...state.inbox], alert: state.alert };
+  const next: ConvState = { ...state, tools: new Map(state.tools), entries: [...state.entries], inbox: [...state.inbox], alert: state.alert, lastRunReport: state.lastRunReport, runStats: state.runStats };
 
   for (const ev of events) {
     switch (ev.type) {
       case "run_start":
         next.status = "running";
         next.alert = null; // 新一轮运行清除旧警告
+        // 收尾汇报统计开启（P0-3）：新一轮开跑时重置
+        next.runStats = { startedAt: Date.now(), toolCalls: 0, toolErrors: 0, replies: 0, userInputs: 0, lastText: "" };
         break;
-      case "run_end":
+      case "run_end": {
         next.status = "idle";
+        // 收尾汇报（P0-3，确定性）：tone 按事实定——failed > attention > done。
+        // 只在本轮确实跑过（有 runStats）且至少有一次回复或一次工具时生成，
+        // 避免空转/纯 abort 也出卡。
+        const s = next.runStats;
+        if (s && (s.replies > 0 || s.toolCalls > 0)) {
+          const failed = next.alert?.kind === "failed" || next.alert?.kind === "unanswered";
+          next.lastRunReport = {
+            at: Date.now(),
+            tone: failed ? "failed" : s.toolErrors > 0 || next.alert?.kind === "retry" ? "attention" : "done",
+            toolCalls: s.toolCalls,
+            toolErrors: s.toolErrors,
+            replies: s.replies,
+            userInputs: s.userInputs,
+            lastText: s.lastText.slice(0, 120),
+            durationMs: Date.now() - s.startedAt,
+          };
+        }
+        next.runStats = undefined;
         break;
+      }
       case "auto_retry_start": {
         next.alert = {
           kind: "retry",
@@ -231,9 +287,20 @@ export function applyEvents(state: ConvState, events: AgentEventLike[]): ConvSta
           next.entries.pop();
         }
         pushEntry(next, ev.entry);
+        // 收尾统计（P0-3）：assistant 回复计数 + 最后文本
+        if ((ev.entry as any)?.kind === "pi.assistant" && next.runStats) {
+          next.runStats.replies++;
+          const m = (ev.entry as any)?.model?.[0];
+          const txt = typeof m?.content === "string" ? m.content
+            : Array.isArray(m?.content)
+              ? m.content.filter((b: any) => b.type === "text").map((b: any) => b.text ?? "").join("")
+              : "";
+          if (txt.trim()) next.runStats.lastText = txt.trim();
+        }
         break;
       }
       case "tool_execution_start": {
+        if (next.runStats) next.runStats.toolCalls++; // 收尾统计（P0-3）
         const card = next.tools.get(String(ev.toolCallId));
         if (card) {
           card.status = "running";
@@ -273,6 +340,7 @@ export function applyEvents(state: ConvState, events: AgentEventLike[]): ConvSta
           if (card.status === "done" && !card.output && typeof (ev.entry as any)?.data?.output === "string") {
             card.output = (ev.entry as any).data.output;
           }
+          if (card.status === "error" && next.runStats) next.runStats.toolErrors++; // 收尾统计（P0-3）
         }
         break;
       }
@@ -283,6 +351,9 @@ export function applyEvents(state: ConvState, events: AgentEventLike[]): ConvSta
       case "entry_appended": {
         // user 消息落位（steer/ask 提交后）
         const kind = (ev.entry as any).kind;
+        if (kind === "pi.user") {
+          if (next.runStats) next.runStats.userInputs++; // 收尾统计（P0-3）：steer 也算
+        }
         if (kind === "pi.user" || kind === "pi.system") {
           pushEntry(next, ev.entry);
         }

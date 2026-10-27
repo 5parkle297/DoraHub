@@ -2,9 +2,11 @@ import { useEffect, useState } from "react";
 import { useRoute, navigate, useIsWide } from "./route.ts";
 import { useApp } from "./state/conn.tsx";
 import { api } from "./api.ts";
+import { wsClient } from "./ws.ts";
 import { ConversationsPage, Sidebar, envLabel, envColorClass, projectOf } from "./components/Sidebar.tsx";
 import { ConversationPage } from "./pages/Conversation.tsx";
 import { SettingsModal } from "./components/SettingsModal.tsx";
+import { NeedsYouButton } from "./components/NeedsYouButton.tsx";
 import { LogoLockup, LogoMark } from "./components/Logo.tsx";
 
 const CONN_LABEL: Record<string, { text: string; cls: string }> = {
@@ -52,7 +54,8 @@ export function App() {
     );
   }
 
-  // 手机单栏（驾驶舱模式：无管理功能）
+  // 手机单栏（驾驶舱模式：管理功能收敛，但「等你处理」聚合是只读+跳转，属例外——
+  // 手机上确认卡埋在会话里要挨个翻，聚合入口是刚需（P0-2/P0-4））
   return (
     <div className="app">
       <div className={`connbar ${conn.cls}`}>{conn.text || "●"}</div>
@@ -62,7 +65,7 @@ export function App() {
             <h1>
               <LogoLockup size={26} fontSize="22px" />
             </h1>
-            <NewConvButton />
+            <MobileHeaderExtras />
           </header>
           <ConversationsPage />
         </div>
@@ -72,21 +75,42 @@ export function App() {
   );
 }
 
-/** 新建按钮（手机列表页）：点击前刷新执行机状态。 */
-function NewConvButton() {
-  return (
-    <button
-      className="btn primary"
-      onClick={() => window.dispatchEvent(new CustomEvent("dorahub:new-conv"))}
-    >
-      ＋ 新会话
-    </button>
-  );
+/** 手机列表页 header 右侧：等你处理入口（P0-4 手机等价第一刀）。 */
+function MobileHeaderExtras() {
+  const [convs, setConvs] = useState<import("@dorahub/shared").ConversationSummary[]>([]);
+  useEffect(() => {
+    api.listConversations().then(setConvs).catch(() => {});
+    const unsub = wsClient.subscribe({
+      onFrame: (f) => {
+        if (f.t === "attention") {
+          setConvs((cs) => cs.map((c) => (c.id === f.conv ? { ...c, pendingConfirms: f.pending } : c)));
+        } else if (f.t === "conv_meta") {
+          setConvs((cs) => cs.map((c) => (c.id === f.conv ? { ...c, name: f.name } : c)));
+        }
+      },
+    });
+    return unsub;
+  }, []);
+  return <NeedsYouButton convs={convs} />;
 }
 
-/** 左栏头部：品牌 + 设置 + 新建（桌面）。 */
+/** 左栏头部：品牌 + 等你处理 + 设置 + 新建（桌面）。 */
 function SidebarHeader() {
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [convs, setConvs] = useState<import("@dorahub/shared").ConversationSummary[]>([]);
+  useEffect(() => {
+    api.listConversations().then(setConvs).catch(() => {});
+    const unsub = wsClient.subscribe({
+      onFrame: (f) => {
+        if (f.t === "attention") {
+          setConvs((cs) => cs.map((c) => (c.id === f.conv ? { ...c, pendingConfirms: f.pending } : c)));
+        } else if (f.t === "conv_meta") {
+          setConvs((cs) => cs.map((c) => (c.id === f.conv ? { ...c, name: f.name } : c)));
+        }
+      },
+    });
+    return unsub;
+  }, []);
   return (
     <header className="list-header">
       <button
@@ -96,6 +120,7 @@ function SidebarHeader() {
       >
         <LogoLockup size={22} />
       </button>
+      <NeedsYouButton convs={convs} />
       <div className="header-btns">
         <button className="btn ghost icon-btn" title="设置" onClick={() => setSettingsOpen(true)}>
           ⚙
@@ -139,7 +164,27 @@ function WelcomePane() {
         </span>
       </div>
       <div className="welcome-sub">跨设备持久化 Agent 平台</div>
-      <div className="welcome-hint">从左侧选择一个会话，或点左上「＋ 新会话」</div>
+      {loaded && convs.length === 0 ? (
+        /* 零会话空态（P0-6）：行动指引——第一步干什么说清楚，不留白屏 */
+        <div className="welcome-first-steps">
+          <div className="welcome-steps-title">从这两步开始</div>
+          <button
+            className="welcome-step"
+            onClick={() => window.dispatchEvent(new CustomEvent("dorahub:new-conv"))}
+          >
+            <span className="welcome-step-num">1</span>
+            <span className="welcome-step-body">
+              <strong>新建一个会话</strong>
+              <span>选一台执行机，告诉 agent 要做什么</span>
+            </span>
+          </button>
+          <div className="welcome-step-hint">
+            或者：左下「电脑上的 pi 会话」里可以直接导入你已有的会话，在任何设备接着聊。
+          </div>
+        </div>
+      ) : (
+        <div className="welcome-hint">从左侧选择一个会话，或点左上「＋ 新会话」</div>
+      )}
       {loaded && convs.length > 0 && (
         <div className="welcome-recent">
           <div className="welcome-recent-label">最近活动</div>

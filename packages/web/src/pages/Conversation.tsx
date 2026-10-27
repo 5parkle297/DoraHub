@@ -12,6 +12,7 @@ import { ConfirmationCard } from "../components/ConfirmationCard.tsx";
 import { InboxBar } from "../components/Inbox.tsx";
 import { ModelPicker } from "../components/ModelPicker.tsx";
 import { EnvSwitcher } from "../components/EnvSwitcher.tsx";
+import { RunReportCard } from "../components/RunReportCard.tsx";
 import type { ConfirmationItem, ExecutorInfo } from "@dorahub/shared";
 
 export function ConversationPage({ id }: { id: string }) {
@@ -52,6 +53,9 @@ export function ConversationPage({ id }: { id: string }) {
     })();
     wsClient.connect();
     wsClient.send({ t: "attach", conv: id });
+    // 打开会话 = 已读（P0-1）：清 unread 点，广播到其他设备
+    wsClient.send({ t: "read", conv: id });
+    api.markRead(id).catch(() => {}); // HTTP 兜底（WS 未连时也能标）
 
     const unsub = wsClient.subscribe({
       onFrame: (f) => {
@@ -76,6 +80,16 @@ export function ConversationPage({ id }: { id: string }) {
       unsub();
       wsClient.send({ t: "detach", conv: id });
     };
+  }, [id]);
+
+  // 确认卡补拉（存量缺口修复）：刷新/晚进入会话页时，已弹出的确认卡不会
+  // 通过 WS 重放——mount 时拉一次 /api/confirmations 过滤本会话。
+  // 否则确认卡只在「弹卡瞬间页面开着」才可见，刷新即丢（10 分钟超时后静默拒绝）。
+  useEffect(() => {
+    api.pendingConfirmations().then((items) => {
+      const mine = items.filter((c: any) => c.conv === id);
+      if (mine.length > 0) setConfirmations(mine);
+    }).catch(() => {});
   }, [id]);
 
   // 重连后重拉 snapshot（服务端不重放历史）
@@ -262,6 +276,10 @@ export function ConversationPage({ id }: { id: string }) {
         ))}
         {state.entries.length === 0 && (
           <div className="empty">向 agent 提问吧。换台设备打开同一个页面，会话还在这里。</div>
+        )}
+        {/* 收尾汇报卡（P0-3）：跑完一轮且不在跑时显示在消息流末尾 */}
+        {state.status === "idle" && state.lastRunReport && (
+          <RunReportCard report={state.lastRunReport} hasPending={confirmations.length > 0} />
         )}
         {!atBottom && (
           <button className="jump-bottom" onClick={() => setAtBottom(true)}>↓ 最新</button>

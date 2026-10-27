@@ -31,6 +31,10 @@ export interface DorahubEvents {
   /** 确认请求（guard） */
   onConfirmation(conv: string, item: any): void;
   onConfirmationResolved(conv: string, id: string, approved: boolean): void;
+  /** 未读清除（某设备 markRead 后广播，所有设备同步，P0-1） */
+  onRead(conv: string): void;
+  /** 会话等你处理数变化（确认队列增减，P0-2——不 attach 该会话的设备也要收到） */
+  onAttention(conv: string, pending: number): void;
 }
 
 interface ConvRecord {
@@ -49,6 +53,8 @@ interface ConvRecord {
   cwd: string | null;
   /** 来源 pi 会话 key（导入去重；null = 原生） */
   sourcePiKey: string | null;
+  /** 未读：有新动静（assistant 事件）但没人 markRead（P0-1） */
+  unread: boolean;
 }
 
 /** 确认等待者 */
@@ -197,10 +203,17 @@ export class Dorahub {
       model,
       cwd,
       sourcePiKey,
+      unread: false,
     });
   }
 
   listConversations(): ConversationSummary[] {
+    // 等你处理数：确认等待者按 conv 聚合（服务端是真相，坑 #30）
+    const pendingByConv = new Map<string, number>();
+    for (const w of this.confirmWaiters.values()) {
+      if (!w.conv) continue;
+      pendingByConv.set(w.conv, (pendingByConv.get(w.conv) ?? 0) + 1);
+    }
     return [...this.convs.values()]
       .filter((r) => String(r.conv.id) !== this.rootId && !r.meta.hidden)
       .map((r) => ({
@@ -214,6 +227,8 @@ export class Dorahub {
         description: r.meta.description,
         keywords: r.meta.keywords,
         envId: r.meta.envId && r.meta.envId !== "hub" ? r.meta.envId : null,
+        unread: r.unread,
+        pendingConfirms: pendingByConv.get(String(r.conv.id)) ?? 0,
       }));
   }
 
@@ -283,6 +298,10 @@ export class Dorahub {
     const rec = this.convs.get(id)!;
     rec.lastPreview = content.slice(0, 80);
     rec.updatedAt = Date.now();
+    // 无人 attach 时也要跟踪运行（P0-1）：否则无人看的会话跑完了，
+    // status 卡在旧值、unread 也不标——列表完全不知道动静。并 Here 开幽灵流，
+    // run_end 后自动停（避免空转）。
+    if (!rec.stream) await this.startGhostStream(id);
     const submission = await conv.submit(
       {
         type: "input",
@@ -295,6 +314,36 @@ export class Dorahub {
     // 自动命名检查（fire-and-forget，0.5-B）
     this.namer.maybeName(conv);
     return submission;
+  }
+
+  /** 幽灵流：无订阅者时并的事件跟踪（只更新状态/unread/updatedAt，不扇出）。
+   * run_end 到来且仍无订阅者 → 自动停流。
+   * 交棒：幽灵流存续期间有人 attach → rec.stream 被替换成普通流的 stop；
+   * 幽灵流自身的 stop 变 no-op（避免双重停）。 */
+  private async startGhostStream(id: string) {
+    return this.serialize(id, async () => {
+      const rec = this.convs.get(id);
+      if (!rec || rec.stream) return; // 已有流（attach 中或幽灵流已开）
+      const es = await watchEvents(this.harness, rec.conv.id, context);
+      let stopped = false;
+      const stop = async () => {
+        if (stopped) return;
+        stopped = true;
+        // 仍无订阅者才真停（等待期间有人 attach 上了就交棒：doAttach 会换掉 rec.stream）
+        if (rec.pending.size === 0) {
+          if (rec.stream?.stop === stop) rec.stream = undefined;
+          await es.stop().catch(() => {});
+        }
+      };
+      rec.stream = { stop };
+      await es.start(async (events) => {
+        await this.handleStreamEvents(id, events);
+        // run 结束且无人看 → 停幽灵流
+        if (events.some((ev) => ev.type === "run_end") && rec.pending.size === 0) {
+          await stop();
+        }
+      });
+    });
   }
 
   async abort(id: string) {
@@ -454,36 +503,9 @@ export class Dorahub {
 
     if (!rec.stream) {
       const es = await watchEvents(this.harness, conv.id, context);
-      // 状态跟踪：run_start/run_end → conv_status；pi.user 落位 → 自动命名检查
       await es.start(async (events) => {
-        for (const rec2 of this.convs.values()) {
-          if (String(rec2.conv.id) === id) {
-            let running = rec2.status;
-            let userAppended = false;
-            for (const ev of events) {
-              if (ev.type === "run_start") running = "running";
-              if (ev.type === "run_end") running = "idle";
-              if (ev.type === "submission" && ev.record.status === "done") {
-                rec2.updatedAt = Date.now();
-              }
-              if (ev.type === "entry_appended" && (ev.entry as any)?.kind === "pi.user") {
-                userAppended = true;
-              }
-            }
-            if (running !== rec2.status) {
-              rec2.status = running;
-              this.events.onStatus(id, running);
-            }
-            if (userAppended) this.namer.maybeName(rec2.conv);
-            break;
-          }
-        }
-        // 事件只走 this.events.onEvents 总线广播一条路（ws 层按 attached 分发）。
-        // 历史 bug（2026-10-19 手机双份消息）：这里曾同时直调 rec.pending 的
-        // listener——ws 层的 listener 会 send 一帧，onEvents 广播又 send 一帧，
-        // 同一客户端每批 events 收到两份，前端 reducer 跑两遍 → 消息成双。
-        // pending 集合保留，仅作订阅计数（detach 判断何时停流）。
-        this.events.onEvents(id, [...events]);
+        // 状态跟踪 + 扇出（handleStreamEvents 内含 conv_status/unread/自动命名）
+        await this.handleStreamEvents(id, events);
       });
       rec.stream = { stop: () => es.stop() };
     }
@@ -494,6 +516,46 @@ export class Dorahub {
     onSnapshotCaptured?.(); // 此刻起的事件不在 snapshot 里，需要补发
     await es.stop();
     return snapshot;
+  }
+
+  /** 事件流共享处理（attach 流与幽灵流共用）：状态跟踪 + unread + 扇出。
+   * 事件只走 this.events.onEvents 总线广播一条路（ws 层按 attached 分发）。
+   * 历史 bug（2026-10-19 手机双份消息）：这里曾同时直调 rec.pending 的
+   * listener——ws 层的 listener 会 send 一帧，onEvents 广播又 send 一帧，
+   * 同一客户端每批 events 收到两份，前端 reducer 跑两遍 → 消息成双。
+   * pending 集合保留，仅作订阅计数（detach 判断何时停流）。 */
+  private async handleStreamEvents(id: string, events: readonly AgentEvent[]) {
+    const rec = this.convs.get(id);
+    if (rec) {
+      let running = rec.status;
+      let userAppended = false;
+      for (const ev of events) {
+        if (ev.type === "run_start") running = "running";
+        if (ev.type === "run_end") running = "idle";
+        if (ev.type === "submission" && ev.record.status === "done") {
+          rec.updatedAt = Date.now();
+        }
+        if (ev.type === "entry_appended" && (ev.entry as any)?.kind === "pi.user") {
+          userAppended = true;
+        }
+      }
+      if (running !== rec.status) {
+        rec.status = running;
+        this.events.onStatus(id, running);
+      }
+      // 未读（P0-1）：assistant 侧动静（assistant 消息/工具结果）且当前无人 attach。
+      // 有人 attach = 有人正看着这个会话（桌面开着或手机正在看）——不算未读。
+      const hasAssistantActivity = events.some((ev) =>
+        ev.type === "message_end" && (ev.entry as any)?.kind === "pi.assistant"
+        || ev.type === "entry_appended" && (ev.entry as any)?.kind === "pi.assistant"
+        || ev.type === "tool_execution_end",
+      );
+      if (hasAssistantActivity && rec.pending.size === 0 && !rec.unread) {
+        rec.unread = true;
+      }
+      if (userAppended) this.namer.maybeName(rec.conv);
+    }
+    this.events.onEvents(id, [...events]);
   }
 
   /** detach：最后一个订阅者离开时停流（与 attach 串行化，见 attach 注释）。 */
@@ -513,19 +575,40 @@ export class Dorahub {
 
   // ===== 确认队列（guard 回调实现） =====
 
+  /** 标记已读（P0-1）：清除 unread 并广播给所有设备。
+   * 恒广播（不只 unread=true 时）：客户端用它确认 read 帧送达（清补发队列），
+   * 幂等且无回环（客户端不会四 conv_read 再发 read）。 */
+  markRead(id: string) {
+    const rec = this.convs.get(id);
+    if (rec) rec.unread = false;
+    this.events.onRead(id);
+  }
+
   askConfirmation(conv: string, item: any) {
     // 记录 conv 供 answer 时广播（waiter 的 conv 字段）
     this.pendingConv.set(String(item.id), conv);
     this.events.onConfirmation(conv, item);
+    // attention 帧在 waitForConfirmation 入队后推（那时计数才准确）
   }
 
   private pendingConv = new Map<string, string>();
+
+  /** 某会话当前等你处理的确认数。 */
+  attentionOf(conv: string): number {
+    let n = 0;
+    for (const w of this.confirmWaiters.values()) {
+      if (w.conv === conv) n++;
+    }
+    return n;
+  }
 
   async waitForConfirmation(confirmId: string, timeoutMs: number): Promise<boolean> {
     return new Promise((resolve) => {
       const conv = this.pendingConv.get(confirmId) ?? "";
       const timer = setTimeout(() => {
         this.confirmWaiters.delete(confirmId);
+        // 超时 fail-closed 也是一次 attention 变化（卡片从列表消失）
+        this.events.onAttention(conv, this.attentionOf(conv));
         resolve(false);
       }, timeoutMs);
       this.confirmWaiters.set(confirmId, {
@@ -537,6 +620,8 @@ export class Dorahub {
         conv,
         askedAt: Date.now(),
       });
+      // 入队后推送（P0-2）：此刻 attentionOf 已含本项
+      this.events.onAttention(conv, this.attentionOf(conv));
     });
   }
 
@@ -546,6 +631,7 @@ export class Dorahub {
     // resolve 内部触发 guardCb.resolved 的广播；这里不再重复发
     this.pendingConv.delete(confirmId);
     w.resolve(approved);
+    this.events.onAttention(w.conv, this.attentionOf(w.conv));
     return true;
   }
 

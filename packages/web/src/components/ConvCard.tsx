@@ -31,14 +31,18 @@ export function ConvCard({
 
   return (
     <div
-      className={`conv-item ${active ? "active" : ""} ${conv.status === "running" ? "conv-running" : ""}`}
+      className={`conv-item ${active ? "active" : ""} ${conv.status === "running" ? "conv-running" : ""} ${conv.unread ? "conv-unread" : ""}`}
       style={style}
       onClick={() => navigate({ page: "conversation", id: conv.id })}
     >
       <div className="conv-item-top">
+        {conv.unread && <span className="unread-dot" title="有新动静" aria-label="有新动静" />}
         <span className={`conv-name ${unnamed ? "unnamed" : ""}`}>
           {unnamed ? "新会话" : conv.name}
         </span>
+        {conv.pendingConfirms > 0 && (
+          <span className="badge-waiting" title="有确认请求等你处理">◆ 等你 ×{conv.pendingConfirms}</span>
+        )}
         {conv.status === "running" && <span className="badge-running">● 运行中</span>}
         <span className="conv-time">{relTime(conv.updatedAt)}</span>
         {confirming ? (

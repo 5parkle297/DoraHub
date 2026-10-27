@@ -77,7 +77,11 @@ async function main() {
     const { BACKGROUND_CONTEXT } = await import("@earendil-works/chord/context");
 
     const guardCb = {
-      ask: (conv: string, item: any) => { wsBus?.onConfirmation(conv, item); },
+      ask: (conv: string, item: any) => {
+        // 入 Dorahub 确认队列（P0-2：pendingConv 登记 + attention 派生推送），
+        // 再由 Dorahub 统一广播 confirmation 帧（单一出口）
+        app.askConfirmation(conv, item);
+      },
       wait: (confirmId: string, timeoutMs: number) => app.waitForConfirmation(confirmId, timeoutMs),
       resolved: (conv: string, confirmId: string, approved: boolean) => {
         wsBus?.onConfirmationResolved(conv, confirmId, approved);
@@ -121,6 +125,8 @@ async function main() {
     onMeta: (conv, meta) => wsBus?.onMeta(conv, meta),
     onConfirmation: (conv, item) => wsBus?.onConfirmation(conv, item),
     onConfirmationResolved: (conv, id, approved) => wsBus?.onConfirmationResolved(conv, id, approved),
+    onRead: (conv) => wsBus?.onRead(conv),
+    onAttention: (conv, pending) => wsBus?.onAttention(conv, pending),
   }, { defaultCwd: cwd, defaultModelId: modelId, models });
 
   await app.start();

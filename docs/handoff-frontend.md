@@ -1,6 +1,7 @@
 # DoraHub 交接文档 v8（给下一个会话：参考项目对齐分析）
 
 > 写于 2026-10-26（v8）。v7 会话完成：手机同步问题四连修（双扇出/attach 竞态/pi 导入 envId/模型渠道映射）+ thinkingLevel 丢失修复（46d840d，均上线）。
+> **v8 补记（2026-10-28 同日续会）**：§0 参考项目对齐分析已交付（docs/reference-sig-analysis.md，含分级移植方案）；用户拍板「直接开干」后完成 P0 批次六项实施（见「✅ v8 P0 批次已交付」段）。
 > 历史版本（v2-v7 全文）见 git 历史。
 > **历史成果速览**：M0-M4 上线——三执行机远程执行、跨机迁移、pi 会话管理中心、/model 选择器、桌面两栏+手机驾驶舱双模式、视觉系统 v3「原稿格工作台」、P0-1/P0-2、10-26 手机同步四修（b472d22+cebeedd+46d840d）。线上 https://hub.tail242752.ts.net（sw v12）。
 > **本文档结构**：§0 本次任务（必读）→ §1 怎么跑 → §2 现状 → §3 API → §4 代码地图 → §5 设计约束 → §6 坑清单（33 条）→ §7 验收 → §8 发版 → §9 自由度。中长期项在 docs/roadmap.md。
@@ -48,17 +49,40 @@
 - **P0-2 #3（260e5e7）**：扫描行级进度（⟳ 预计耗时 EWMA / ✓ 真实数量+耗时 / ✕ 连接失败不静默；超预估 2 倍提示可能离线）
 - 另修：PiFullModal prop 重命名连带 bug（scan 未定义致白屏，tsc --noCheck 查不出——**发版前必须真开页面看**）；全完成+有失败时进度区误隐藏；失败误阻断 meta 轮询
 
+### ✅ v8 P0 批次已交付（2026-10-28，参考项目对齐第一轮，全部本地验证通过）
+
+参考项目分析报告：**docs/reference-sig-analysis.md**（必读，含 P1/P2 后续规划）。
+
+| 项 | 内容 | 验证 |
+|---|---|---|
+| **P0-1 三态区 + unread** | 侧栏列表改为「◆等你处理 / ▶运行中 / 项目分组(空闲)」三区；ConvCard 带未读点+等你徽章；状态全部服务端派生（listConversations 新增 unread/pendingConfirms 字段） | p0-unread-e2e 5/5；UI 实测 |
+| **P0-2 Needs you 聚合** | SidebarHeader/手机列表 header 加「◆等你 N」按钮→弹出聚合列表→跳会话；WS 新增 attention 帧（广播给所有连接，不要求 attach）；useAttention hook | p0-attention-e2e 6/6；p0-ui-waiting-e2e 13/13 |
+| **P0-3 收尾汇报卡** | run_end 后消息流末尾确定性生成总结卡（tone ✓⚠️⛔/结论行/工具统计/耗时，不调 LLM）；reducer 里 RunStats 跟踪 | p0-runreport-e2e 5/5 |
+| **P0-4 手机等价第一刀** | 手机列表页 header 加「等你」入口；pi 会话区本来就在列表页同体；驾驶舱克制原则保持（无设置齿轮） | p0-ui-test 手机断言 |
+| **P0-5 导入冒烟警告** | pi-import 检测模型归一/降级时返回 warning；前端显式提示不自动跳转（侧栏区+全量弹窗两处） | tsc+构建（场景覆盖待真机多渠道样本） |
+| **P0-6 空态指引** | WelcomePane 零会话时「从这两步开始」行动指引（新建/导入 pi 会话）；有会话时保持原 hint | p0-ui-test |
+
+**同时修复的存量 bug**：
+1. **guard 确认卡不入队列**：guardCb.ask 原来直接 wsBus 广播、绕过 Dorahub.askConfirmation → pendingConfirmations() 里 waiter.conv 恒空字符串、/api/confirmations 拿不到 conv 关联（存量 bug，本次 P0-2 依赖它才暴露）——已改走 app.askConfirmation 单一出口
+2. **确认卡刷新即丢**：会话页 mount 时不拉 /api/confirmations，弹卡后刷新页面确认卡消失（只能等 10 分钟超时 fail-closed）——已在 Conversation 页 mount 时补拉过滤本会话
+3. **幽灵流机制**：无人 attach 时 submit 也开事件跟踪流（run_end 自动停、有人 attach 交棒）——否则无人看的会话 status 卡旧值、unread 不标
+
+**新协议**（shared/src/index.ts）：SrvFrame 加 `conv_read`/`attention`；CliFrame 加 `read`；ConversationSummary 加 `unread`/`pendingConfirms`；HTTP 加 `POST /api/conversations/:id/read`。
+
+**新测试脚本**（scripts/）：p0-ws-test.mjs（WS 帧验证）、p0-unread-e2e.mjs（unread 全链路）、p0-attention-e2e.mjs（确认卡聚合链路）、p0-ui-test.mjs（桌面+手机 UI 基础）、p0-ui-waiting-e2e.mjs（等你处理全链路 UI）、p0-runreport-e2e.mjs（收尾卡 UI）、p0-dark-check.mjs（深色检查）。
+
+**验收状态**：主回归 ws-test 15/15；p0 全套 36/36；tsc 双包零错；vite build 过；impeccable detect slop=0（advisory 1 个：999px pill 圆角，与 DESIGN.md 无冲突的可接受项）；深色 token 对比度全过 AA。**尚未发版**（§8 流程未跑，待用户验收后发）。
+
+**P1 待办**（下会话，见 reference-sig-analysis.md §4.2）：spec.md 功能需求文档 → 卡死检测 → 今日花费 → 目录浏览器 → 失联语义 → 发送失败重试 → 会话摘要面板。
+
 ### 下会话开场 prompt（复制即用）
 
 ```
 读 D:/hobby/pi-durable/docs/handoff-frontend.md（v8），唯一入口文档。
-本次任务在 §0：参考项目对齐分析。参考项目在这里：
-（在这里贴参考项目的路径/仓库/链接）
-
-按 §0 的产品问题清单详细分析参考项目，对照 §2 的功能清单和“产品视角自省”
-做差距分析，产出分优先级的对齐方案——先给我看方案再动手。
-这是产品需求回归会话，不是重设计会话：视觉系统 v3.2 不动，
-IA 骨架不动；方案拍板后实施过 §7 验收再按 §8 发版。
+本次任务：P1 批次（见 docs/reference-sig-analysis.md §4.2），
+优先 P1-6 功能需求层文档（docs/spec.md，对齐参考项目 PRD 结构）。
+硬约束不变：视觉 v3.2 不动、IA 骨架不动。
+先给我看 spec.md 大纲再写全文。
 ```
 
 ## 1. 开发环境（workpc，Windows）

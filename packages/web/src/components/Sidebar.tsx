@@ -11,6 +11,7 @@ import { navigate, useRoute } from "../route.ts";
 import { ConvCard } from "./ConvCard.tsx";
 import { CreateModal } from "./CreateModal.tsx";
 import { PiSidebarSection } from "./PiSessions.tsx";
+import { useAttention } from "../state/attention.ts";
 import type { ConversationSummary, ExecutorInfo } from "@dorahub/shared";
 
 /** cwd → 项目显示名（basename） */
@@ -107,6 +108,12 @@ function ConversationsInner() {
             refresh();
             return cs;
           });
+        } else if (f.t === "conv_read") {
+          // 另一设备标记已读 → 同步清除本设备的 unread 点（P0-1）
+          setConvs((cs) => cs.map((c) => (c.id === f.conv ? { ...c, unread: false } : c)));
+        } else if (f.t === "attention") {
+          // 等你处理数变化（不 attach 也能收到，P0-2）
+          setConvs((cs) => cs.map((c) => (c.id === f.conv ? { ...c, pendingConfirms: f.pending } : c)));
         }
       },
     });
@@ -128,13 +135,27 @@ function ConversationsInner() {
     }
   }
 
-  // 按项目分组（cwd 为 key），组内按 updatedAt 倒序。
+  // 三区布局（P0-1，对齐参考项目的「回来第一眼」）：
+  //   ① 等你处理（有未处理确认卡）—— amber，最高优先级
+  //   ② 运行中（status=running）—— 蓝色脉冲
+  //   ③ 空闲—— 保持项目分组（cwd 为 key），组内按 updatedAt 倒序
+  // 等你/运行中的会话平铺不分组（通常只有几个，带项目徽章补上下文）；
+  // 未读点（unread）在 ConvCard 内渲染。
   // P0-1 问题 A：没发过消息的空会话（无自动标题且无预览）不进列表，
   // 防误触创建产生噪声；发首条消息后 conv_meta 推送会实时出现。
-  const groups = useMemo(() => {
+  const visible = useMemo(() => convs.filter((c) => c.name || c.lastPreview), [convs]);
+  const waiting = useMemo(
+    () => visible.filter((c) => c.pendingConfirms > 0).sort((a, b) => b.updatedAt - a.updatedAt),
+    [visible],
+  );
+  const running = useMemo(
+    () => visible.filter((c) => c.status === "running" && c.pendingConfirms === 0).sort((a, b) => b.updatedAt - a.updatedAt),
+    [visible],
+  );
+  const idleGroups = useMemo(() => {
     const byCwd = new Map<string, ConversationSummary[]>();
-    for (const c of convs) {
-      if (!c.name && !c.lastPreview) continue;
+    for (const c of visible) {
+      if (c.status === "running" || c.pendingConfirms > 0) continue;
       const key = c.cwd ?? "";
       if (!byCwd.has(key)) byCwd.set(key, []);
       byCwd.get(key)!.push(c);
@@ -153,16 +174,44 @@ function ConversationsInner() {
       return bLast - aLast;
     });
     return list;
-  }, [convs]);
+  }, [visible]);
 
   return (
     <div className="conv-list">
       {error && <div className="error-banner" onClick={() => setError("")}>{error} ✕</div>}
 
-      {groups.length === 0 && (
+      {visible.length === 0 && (
         <div className="empty">还没有会话。创建一个，任何设备都能接着聊。</div>
       )}
-      {groups.map((g) => (
+
+      {/* ① 等你处理（P0-1：回来第一眼） */}
+      {waiting.length > 0 && (
+        <div className="state-section state-waiting">
+          <div className="group-label">
+            <span className="group-name state-waiting-label">◆ 等你处理</span>
+            <span className="group-count">{waiting.length} 个</span>
+          </div>
+          {waiting.map((c) => (
+            <ConvCard key={c.id} conv={c} active={c.id === activeId} style={{ marginTop: 8 }} onDeleted={refresh} />
+          ))}
+        </div>
+      )}
+
+      {/* ② 运行中 */}
+      {running.length > 0 && (
+        <div className="state-section state-running">
+          <div className="group-label">
+            <span className="group-name state-running-label">▶ 运行中</span>
+            <span className="group-count">{running.length} 个</span>
+          </div>
+          {running.map((c) => (
+            <ConvCard key={c.id} conv={c} active={c.id === activeId} style={{ marginTop: 8 }} onDeleted={refresh} />
+          ))}
+        </div>
+      )}
+
+      {/* ③ 空闲：按项目分组（原逻辑保留，P0-1 两全方案：状态优先、项目结构不丢） */}
+      {idleGroups.map((g) => (
         <div key={g.cwd || "_none"}>
           <div className="group-label" title={g.project.path}>
             <span className="group-name">{g.project.name}</span>
