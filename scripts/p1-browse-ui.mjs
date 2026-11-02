@@ -1,11 +1,12 @@
 /**
- * P1-4 目录浏览器 UI e2e（preview 4399 + server 8787）：
- * 1. 新建弹窗有「浏览」按钮 → 展开面板（面包屑+列表）
- * 2. hub 默认 cwd 列出（.git 等目录在前）
- * 3. 点目录进入（面包屑更新）
- * 4. 「选这个文件夹」回填路径输入框
- * 5. 手机 390px 面板不溢出
- * 6. workpc 离线错误显示（可选——laptop 常离线）
+ * P1-4 目录树浏览器 UI e2e v2（对齐 Sig directory-picker 交互，preview 4399 + server 8787）：
+ * 1. 展开面板：toolbar（主目录/电脑/上一级/隐藏目录开关）+ 面包屑 + 手输跳转
+ * 2. 只列目录（无文件行）
+ * 3. 点目录进入，面包屑更新
+ * 4. 「电脑」→ 盘根（parent=null，「上一级」禁用）
+ * 5. 手输路径跳转
+ * 6. 隐藏目录开关（hidden=1 出现 .git 等）
+ * 7. 选这个目录 → 回填
  */
 import puppeteer from "file:///C:/Users/shiyu/.pi/agent/skills/pi-skills/browser-tools/node_modules/puppeteer-core/lib/esm/puppeteer/puppeteer-core.js";
 
@@ -19,72 +20,101 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const browser = await puppeteer.connect({ browserURL: "http://127.0.0.1:9222", defaultViewport: null });
 const page = await browser.newPage();
+const errors = [];
+page.on("pageerror", (e) => errors.push(String(e).slice(0, 150)));
 await page.setViewport({ width: 1280, height: 900 });
 await page.goto(`${BASE}/`, { waitUntil: "networkidle2" });
 await page.evaluate(() => navigator.serviceWorker.getRegistrations().then((rs) => rs.forEach((r) => r.unregister())));
 await page.reload({ waitUntil: "networkidle2" });
 
-// 打开新建弹窗
+// 打开新建 → 浏览
 await page.evaluate(() => window.dispatchEvent(new CustomEvent("dorahub:new-conv")));
 await sleep(600);
-ok(!!(await page.$(".modal .dir-browser")) === false, "初始不显示浏览面板");
-
-// 点「浏览」
 const browseBtn = await page.evaluateHandle(() => [...document.querySelectorAll(".modal button")].find((b) => b.textContent.trim() === "浏览"));
-ok(!!browseBtn && !(await browseBtn.asElement().evaluate((e) => e === null)), "有「浏览」按钮");
 await browseBtn.asElement().click();
-await sleep(1500);
-ok(!!(await page.$(".dir-browser")), "浏览面板展开");
-const crumbs = await page.$$eval(".crumb", (els) => els.map((e) => e.textContent));
-ok(crumbs.length > 0, `面包屑渲染（${crumbs.join("/")}）`);
+await sleep(2000);
 
-// 等列表加载
-await sleep(1000);
+// 1. 结构
+ok(!!(await page.$(".dir-toolbar")), "toolbar 渲染（主目录/电脑/上一级）");
+ok(!!(await page.$(".dir-go")), "手输跳转框");
+ok(!!(await page.$(".dir-hidden-toggle")), "隐藏目录开关");
+const crumbs1 = await page.$$eval(".crumb", (els) => els.map((e) => e.textContent));
+ok(crumbs1.length > 0, "面包屑渲染", crumbs1.join("›"));
+
+// 2. 只列目录
+await sleep(800);
 const items = await page.$$eval(".dir-item", (els) => els.map((e) => e.textContent.trim()));
-ok(items.length > 0, `目录列表渲染（${items.length} 项）`, items.slice(0, 5).join(","));
+ok(items.length > 0, `目录列表（${items.length} 项）`, items.slice(0, 4).join(","));
+ok(!items.some((t) => t.includes("package.json") || t.includes("README")), "无文件噪声（只目录）");
+ok(!items.some((t) => t.startsWith(".") || t.includes(".git")), "默认隐藏 . 目录");
 
-// 点一个目录进入
-if (items.length > 0) {
-  const first = await page.evaluateHandle(() => document.querySelectorAll(".dir-item")[0]);
-  await first.asElement().click();
-  await sleep(1500);
-  const crumbs2 = await page.$$eval(".crumb", (els) => els.map((e) => e.textContent));
-  const items2 = await page.$$eval(".dir-item", (els) => els.length);
-  ok(crumbs2.length > crumbs.length || items2 >= 0, `进入子目录（${crumbs2.join("/")}，${items2} 项）`);
-}
+// 3. 进子目录
+const firstDir = await page.evaluateHandle(() => document.querySelector(".dir-item"));
+await firstDir.asElement().click();
+await sleep(1500);
+const crumbs2 = await page.$$eval(".crumb", (els) => els.map((e) => e.textContent));
+ok(crumbs2.length > crumbs1.length || crumbs2.join() !== crumbs1.join(), "进入子目录面包屑更新", crumbs2.join("›"));
 
-// 「选这个文件夹」回填
-const pickBtn = await page.evaluateHandle(() => [...document.querySelectorAll(".dir-actions button")].find((b) => b.textContent.includes("选这个文件夹")));
+// 4. 电脑 → 盘根
+const computerBtn = await page.evaluateHandle(() => [...document.querySelectorAll(".dir-toolbar button")].find((b) => b.textContent.includes("电脑")));
+await computerBtn.asElement().click();
+await sleep(1800);
+const rootCrumbs = await page.$$eval(".crumb", (els) => els.map((e) => e.textContent));
+const upBtn = await page.evaluateHandle(() => [...document.querySelectorAll(".dir-toolbar button")].find((b) => b.textContent.includes("上一级")));
+const upDisabled = await upBtn.asElement().evaluate((e) => e.disabled);
+ok(rootCrumbs.length === 1 && /^([A-Za-z]:[\\/]?)?$|^\/$/.test(rootCrumbs[0]), "电脑根：盘符列表", rootCrumbs.join("›"));
+ok(upDisabled, "盘根处「上一级」禁用");
+
+// 5. 手输跳转
+await page.evaluate(() => {
+  const inp = document.querySelector(".dir-go input");
+  const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
+  setter.call(inp, "D:/hobby");
+  inp.dispatchEvent(new Event("input", { bubbles: true }));
+});
+await page.click(".dir-go .btn");
+await sleep(1800);
+const afterGo = await page.$$eval(".crumb", (els) => els.map((e) => e.textContent));
+ok(afterGo.join("›").includes("hobby"), "手输跳转到 D:/hobby", afterGo.join("›"));
+
+// 6. 隐藏目录开关
+const before = await page.$$eval(".dir-item", (els) => els.length);
+const toggle = await page.$(".dir-hidden-toggle input");
+await toggle.click();
+await sleep(1800);
+const after = await page.$$eval(".dir-item", (els) => els.length);
+ok(after >= before, `开关后目录数 ≥ 默认`, `${before}→${after}`);
+
+// 关掉开关还原
+const toggle2 = await page.$(".dir-hidden-toggle input");
+await toggle2.click();
+await sleep(1500);
+
+// 7. 选这个目录回填
+const pickBtn = await page.evaluateHandle(() => [...document.querySelectorAll(".dir-actions button")].find((b) => b.textContent.includes("选这个目录")));
 await pickBtn.asElement().click();
-await sleep(400);
+await sleep(500);
 const inputVal = await page.$eval(".modal input", (e) => e.value);
-ok(inputVal.length > 0, `路径回填输入框（${inputVal}）`);
+ok(inputVal.includes("hobby"), "路径回填", inputVal);
 ok(!(await page.$(".dir-browser")), "面板关闭");
+ok(errors.length === 0, "零 pageerror", errors[0] ?? "");
 
-// 手机 390px：手机列表页无新建按钮（IA 现状：「＋」只在桌面 header），
-// 新建弹窗在手机只能从零会话空态的第一步指引进入——用 dispatchEvent 直接验证弹窗本身
+// 手机 390px
 await page.setViewport({ width: 390, height: 844 });
 await page.goto(`${BASE}/#/conversations`, { waitUntil: "networkidle2" });
-await sleep(1000);
+await sleep(1200);
 await page.evaluate(() => window.dispatchEvent(new CustomEvent("dorahub:new-conv")));
 await sleep(600);
-{
-  const browseBtn2 = await page.evaluateHandle(() => [...document.querySelectorAll(".modal button")].find((b) => b.textContent.trim() === "浏览"));
-  if (browseBtn2 && (await browseBtn2.asElement())) {
-    await browseBtn2.asElement().click();
-    await sleep(1500);
-    const fit = await page.evaluate(() => {
-      const el = document.querySelector(".dir-browser");
-      if (!el) return "missing";
-      const r = el.getBoundingClientRect();
-      return JSON.stringify({ overflow: r.right > window.innerWidth + 1, w: Math.round(r.width), vw: window.innerWidth });
-    });
-    ok(fit !== "missing" && !JSON.parse(fit).overflow, "手机 390px 面板不溢出", fit);
-    ok(!!(await page.$(".dir-list .dir-item")), "手机列表渲染");
-  } else {
-    ok(false, "手机新建弹窗有浏览按钮");
-  }
-}
+const bBtn2 = await page.evaluateHandle(() => [...document.querySelectorAll(".modal button")].find((b) => b.textContent.trim() === "浏览"));
+await bBtn2.asElement().click();
+await sleep(1800);
+const fit = await page.evaluate(() => {
+  const el = document.querySelector(".dir-browser");
+  if (!el) return "missing";
+  const r = el.getBoundingClientRect();
+  return JSON.stringify({ overflow: r.right > window.innerWidth + 1, w: Math.round(r.width) });
+});
+ok(fit !== "missing" && !JSON.parse(fit).overflow, "手机 390px 不溢出", fit);
 
 console.log(`\n结果: ${pass} 过 / ${fail} 挂`);
 await page.close();

@@ -159,20 +159,33 @@ function rememberCwd(cwd: string, envId: string) {
   } catch { /* ignore */ }
 }
 
-/** 目录浏览器（P1-4）：面包屑 + 列表点选，选中的目录回填到路径输入框。 */
+/** 目录树浏览器（P1-4，对齐 Sig directory-picker 交互）：
+ * - 只列目录（选工作目录时文件是噪声）；默认滤 . 隐藏目录（可开关）
+ * - 快捷导航：主目录(~) / 电脑根 / 上一级（parent 由服务端返回，不算分隔符）
+ * - 面包屑 home 感知：home 下显示 ~ 开头
+ * - 手输跳转：输路径回车直达（浏览/手输随时切换，同一个面板）
+ * - 超限 truncated 明示，不默默截断
+ * 选中的目录回填到新建弹窗的路径输入框。 */
 function DirBrowser({ envId, onPick, onClose }: { envId: string; onPick: (path: string) => void; onClose: () => void }) {
-  const [path, setPath] = useState<string | null>(null); // null = 还没加载（首次拉默认 cwd）
-  const [items, setItems] = useState<BrowseResult["items"]>([]);
+  const [path, setPath] = useState<string | null>(null);
+  const [home, setHome] = useState<string | null>(null);
+  const [dirs, setDirs] = useState<BrowseResult["directories"]>([]);
+  const [truncated, setTruncated] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showHidden, setShowHidden] = useState(false);
+  const [goDraft, setGoDraft] = useState("");
 
-  async function load(p: string | null) {
+  async function load(p: string | null, hidden = showHidden) {
     setLoading(true);
     setError(null);
     try {
-      const r = await api.browse(envId, p);
+      const r = await api.browse(envId, p ?? undefined, hidden);
       setPath(r.path);
-      setItems(r.items);
+      setHome(r.home);
+      setDirs(r.directories);
+      setTruncated(r.truncated);
+      setGoDraft(r.path);
     } catch (e: any) {
       setError(e?.message ?? "读取失败（机器离线或路径不存在）");
     } finally {
@@ -181,82 +194,93 @@ function DirBrowser({ envId, onPick, onClose }: { envId: string; onPick: (path: 
   }
 
   useEffect(() => {
-    load(null);
-  }, [envId]); // 切机器重新从默认 cwd 开始
+    load(null, false);
+    setShowHidden(false);
+  }, [envId]);
 
-  // 面包屑：把路径拆成可点段（Windows D:\hobby\x 与 POSIX /var/lib 都适用）
+  // 面包屑（home 感知：home 下的路径显示 ~ 开头；盘符/根保留）
   const crumbs = useMemo(() => {
     if (path == null) return [];
-    const sep = path.includes("\\") ? "\\" : "/"; // 源码里 "\\" = 一个反斜杠
-    const parts = path.split(/[/\\]+/).filter(Boolean);
-    const out: { label: string; path: string }[] = [];
-    let acc = "";
-    for (const part of parts) {
-      acc = acc ? acc + sep + part : (sep === "/" ? "/" + part : part);
-      out.push({ label: part, path: acc });
+    const sep = path.includes("\\") ? "\\" : "/";
+    const underHome = home != null && (path === home || path.startsWith(home.replace(/[\\/]+$/, "") + sep) || path.startsWith(home.replace(/[\\/]+$/, "").replace(/\\/g, "/") + "/"));
+    // start：home 优先（~）；否则盘符（D:\ 或 D:/）；否则 POSIX /
+    const drive = path.match(/^[A-Za-z]:[\\/]?/)?.[0];
+    const start = underHome ? home! : (drive ?? "/");
+    const out: { label: string; path: string }[] = [{ label: underHome ? "~" : (drive ?? "/"), path: start }];
+    if (path === start) return out;
+    for (const part of path.slice(start.length).split(/[/\\]+/).filter(Boolean)) {
+      const prev = out[out.length - 1].path;
+      out.push({ label: part, path: prev.endsWith(sep) ? prev + part : prev + sep + part });
     }
     return out;
-  }, [path]);
+  }, [path, home]);
 
-  function goUp() {
-    if (path == null) return;
-    const sep = path.includes("\\") ? "\\" : "/";
-    const parts = path.split(/[/\\]+/).filter(Boolean);
-    if (parts.length <= 1) {
-      load(sep === "/" ? "/" : parts[0] + ":\\");
-      return;
-    }
-    parts.pop();
-    let up = parts.join(sep);
-    if (sep === "/") up = "/" + up;
-    else if (parts.length === 1 && parts[0].endsWith(":")) up = parts[0] + ":\\";
-    load(up);
-  }
+  // 电脑根（Windows = 盘符列表；POSIX = /）。首刷时 path 已知盘符才能算根。
+  const rootPath = useMemo(() => {
+    if (path == null) return null;
+    if (path.startsWith("/")) return "/";
+    const m = path.match(/^([A-Za-z]:)/);
+    return m ? m[1] + "\\" : null;
+  }, [path]);
 
   return (
     <div className="dir-browser">
-      <div className="dir-crumbs">
-        <button className="btn ghost" title="上一级" onClick={goUp} disabled={loading}>↑</button>
-        <div className="crumb-path">
-          {path == null ? <span className="crumb">…</span> : (
-            <>
-              {crumbs.map((c, i) => (
-                <span key={c.path} className="crumb-wrap">
-                  {i > 0 && <span className="crumb-sep">/</span>}
-                  <button className="crumb" onClick={() => load(c.path)}>{c.label}</button>
-                </span>
-              ))}
-            </>
-          )}
-        </div>
+      <div className="dir-toolbar">
+        <button className="btn ghost" disabled={loading || home == null} title="主目录" onClick={() => load(home!)}>⌂ 主目录</button>
+        <button className="btn ghost" disabled={loading || rootPath == null} title="电脑根（Windows 盘符列表）" onClick={() => load(rootPath!)}>▣ 电脑</button>
+        <button className="btn ghost" disabled={loading || !crumbsAtLeast2(crumbs)} title="上一级" onClick={() => {
+          // 上一级 = 面包屑倒数第二项；已到根则不可点
+          const prev = crumbs[crumbs.length - 2];
+          if (prev) load(prev.path);
+        }}>↑ 上一级</button>
+        <label className="dir-hidden-toggle" title="显示 . 开头的隐藏目录">
+          <input type="checkbox" checked={showHidden} onChange={(e) => {
+            setShowHidden(e.target.checked);
+            load(path, e.target.checked);
+          }} />
+          隐藏目录
+        </label>
         <button className="btn ghost" title="关闭浏览" onClick={onClose}>✕</button>
       </div>
+      <div className="dir-crumbs">
+        {path == null ? <span className="crumb">…</span> : crumbs.map((c, i) => (
+          <span key={c.path} className="crumb-wrap">
+            {i > 0 && <span className="crumb-sep">›</span>}
+            <button className="crumb" onClick={() => load(c.path)}>{c.label}</button>
+          </span>
+        ))}
+      </div>
+      <form className="dir-go" onSubmit={(e) => { e.preventDefault(); if (goDraft.trim()) load(goDraft.trim()); }}>
+        <input
+          value={goDraft}
+          placeholder="输入路径直接跳转…"
+          onChange={(e) => setGoDraft(e.target.value)}
+          spellCheck={false}
+          autoComplete="off"
+        />
+        <button className="btn" disabled={loading || !goDraft.trim()}>跳转</button>
+      </form>
       <div className="dir-list">
         {loading && <div className="dir-msg">读取中…</div>}
         {error && <div className="dir-msg error">{error}</div>}
-        {!loading && !error && items.length === 0 && <div className="dir-msg">这个文件夹是空的</div>}
-        {!loading && !error && items.map((f) => (
-          f.kind === "directory" ? (
-            <button key={f.name} className="dir-item" onClick={() => load(path == null ? f.name : joinPath(path, f.name))}>
-              <span className="dir-icon">▸</span> {f.name}
-            </button>
-          ) : (
-            <div key={f.name} className="dir-item file" title={f.size != null ? `${f.size} 字节` : undefined}>
-              <span className="dir-icon">·</span> {f.name}
-            </div>
-          )
+        {!loading && !error && dirs.length === 0 && <div className="dir-msg">这个目录下没有子目录</div>}
+        {!loading && !error && dirs.map((d) => (
+          <button key={d.path} className="dir-item" onClick={() => load(d.path)} title={d.path}>
+            <span className="dir-icon">▸</span> {d.name}
+          </button>
         ))}
+        {truncated && !loading && <div className="dir-msg">目录太多，只显示前 500 个——可以用上面的路径跳转直达</div>}
       </div>
       <div className="dir-actions">
-        <button className="btn primary" disabled={path == null} onClick={() => path && onPick(path)}>
-          选这个文件夹
+        <span className="dir-selected" title={path ?? undefined}>当前位置：{path ?? "…"}</span>
+        <button className="btn primary" disabled={path == null || loading} onClick={() => path && onPick(path)}>
+          选这个目录
         </button>
       </div>
     </div>
   );
 }
 
-function joinPath(base: string, name: string): string {
-  const sep = base.includes("\\") ? "\\" : "/";
-  return base.endsWith(sep) ? base + name : base + sep + name;
+function crumbsAtLeast2(crumbs: { label: string; path: string }[]) {
+  return crumbs.length >= 2;
 }

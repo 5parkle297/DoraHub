@@ -53,10 +53,16 @@ export interface UsageToday {
   totals: ModelUsageToday & { activeConvs: number };
 }
 
-/** /api/executors/:env/browse 返回（P1-4 目录浏览器） */
+/** /api/executors/:env/browse 返回（P1-4 目录树，对齐 Sig directory-browser 语义：只目录+home/parent+truncated） */
 export interface BrowseResult {
   path: string;
-  items: { name: string; kind: "directory" | "file"; size: number | null }[];
+  /** 当前机器用户主目录（~ 的展开；null = 未知） */
+  home: string | null;
+  /** 父目录（盘根/POSIX 根为 null） */
+  parent: string | null;
+  directories: { name: string; path: string }[];
+  /** 超过 500 条被截断 */
+  truncated: boolean;
 }
 
 export interface CreateConversationRequest {

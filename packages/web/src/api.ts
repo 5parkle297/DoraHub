@@ -98,8 +98,8 @@ export const api = {
 
   usageToday: () => call<UsageToday>("/api/usage/today"),
 
-  browse: (envId: string, path?: string) =>
-    call<BrowseResult>(`/api/executors/${encodeURIComponent(envId)}/browse${path ? `?path=${encodeURIComponent(path)}` : ""}`),
+  browse: (envId: string, path?: string, showHidden = false) =>
+    call<BrowseResult>(`/api/executors/${encodeURIComponent(envId)}/browse?${new URLSearchParams({ ...(path ? { path } : {}), ...(showHidden ? { hidden: "1" } : {}) })}`),
 
   answerConfirmation: (id: string, approved: boolean) =>
     call<{ ok: true }>(`/api/confirmations/${encodeURIComponent(id)}`, {

@@ -100,6 +100,7 @@
 | 4 | 手机「＋」新建 | IA 补口（用户拍板「一并精进」）：新建是驾驶动作不是管理动作，手机 header 加「＋」 |
 | 5 | 会话页离线提示 | 失联语义轻量半步：本会话执行机离线时 amber 条「会话不会丢，工具调用等它上线」+ 刷新按钮 |
 | 6 | 导入场景测试 | p1-import-scenarios.mjs（10 项）：真实文件全链路（归一+warning/envId/幂等/导入后可用性 954 条 entries）；顺手修语义：软删后的重导 = 新会话（findByPiSource 忽略 hidden） |
+| 8 | 目录树 v2 | 对齐 Sig directory-picker 全套交互：只列目录（无文件噪声）/默认滤隐藏目录（可开关）/主目录~+电脑根+上一级快捷/home 感知面包屑/手输路径跳转/truncated 明示；browse 端点重构（返回 home/parent/directories，parent 服务端算） |
 | 7 | CONTEXT.md 词汇表 | 统一产品词汇（会话/执行机/确认卡/失联…），代码文档 UI 不各说各话 |
 
 验证：p1-polish-ui 6/6；全套回归（ws-test 15/15、unread/attention/runreport/usage/import/smoke 全过）；slop=0。

@@ -309,58 +309,71 @@ export function createRouter(deps: HttpApiDeps) {
       if (!env) return err(res, 502, "offline", `executor ${envId} 不可用（可能离线）`);
       // 无 path → 列默认 cwd（远程机 = home，hub = 服务 cwd）
       const target = dirPath ?? (env as any).cwd ?? "/";
-      let items: { name: string; kind: "directory" | "file"; size: number | null }[];
+      const showHidden = url.searchParams.get("hidden") === "1";
+      // 目录树语义（对齐 Sig directory-browser）：选工作目录只列目录不列文件、
+      // 默认滤 . 开头（可开）、服务端返回 home/parent（前端不用算分隔符）、超限明示 truncated。
+      let dirs: { name: string; path: string }[];
+      let home: string | null = null;
+      let truncated = false;
+      const MAX_ENTRIES = 500;
+      const sep = target.includes("\\") ? "\\" : "/";
+      const joinP = (base: string, name: string) => base.endsWith(sep) ? base + name : base + sep + name;
+      // parent：Windows 盘根（D:\ 或 D:/）和 POSIX / 无父；其余去最后一段（两种分隔符都处理）
+      // D:/hobby -> D:/；D:/ -> null；/var/lib -> /var；/ -> null；C:\ -> null
+      const isRoot = /^([A-Za-z]:[\\/]?|\/)$/.test(target) || target === "/";
+      const stripped = target.replace(/[\\/]+$/, "");
+      const lastSep = Math.max(stripped.lastIndexOf("\\"), stripped.lastIndexOf("/"));
+      const parent = isRoot || lastSep <= 0 ? null : stripped.slice(0, lastSep) || null;
       // 离线机器的 SSH 调用会挂到分钟级——浏览是交互式操作，12s 封顶友好失败。
       // 注意：race 输后悬空定时器的 reject 必须吞掉，否则 unhandledRejection 杀进程（10-29 实踩）。
+      const withTimeout = (p: Promise<any>, ms: number, label: string) => new Promise((resolve, reject) => {
+        let done = false;
+        const t = setTimeout(() => { if (!done) reject(new Error(label)); }, ms);
+        p.then(
+          (v) => { done = true; clearTimeout(t); resolve(v); },
+          (e) => { done = true; clearTimeout(t); reject(e); },
+        );
+      });
       let r: any = null;
       try {
-        r = await new Promise((resolve, reject) => {
-          let done = false;
-          const t = setTimeout(() => { if (!done) reject(new Error("读取超时（机器可能离线）")); }, 12_000);
-          env.listDir(target, context).then(
-            (v: any) => { done = true; clearTimeout(t); resolve(v); },
-            (e: any) => { done = true; clearTimeout(t); reject(e); },
-          );
-        });
+        r = await withTimeout(env.listDir(target, context), 12_000, "读取超时（机器可能离线）");
+        home = envId === "hub"
+          ? (await import("node:os")).homedir()
+          : await withTimeout((env as any).connection.info(), 5_000, "").then((i: any) => i?.home ?? null).catch(() => null);
       } catch (e: any) {
         return json(res, 502, { error: { code: "list_failed", message: e?.message ?? "读取失败（机器可能离线）" } });
       }
       if (r && r.ok) {
-        items = (r.value as any[])
-          .filter((f) => f.kind === "directory" || f.kind === "file")
-          .sort((a, b) => (a.kind === b.kind ? String(a.name).localeCompare(String(b.name)) : a.kind === "directory" ? -1 : 1))
-          .slice(0, 500)
-          .map((f) => ({ name: String(f.name), kind: f.kind as "directory" | "file", size: typeof f.size === "number" ? f.size : null }));
+        const all = (r.value as any[])
+          .filter((f) => f.kind === "directory")
+          .map((f) => ({ name: String(f.name), path: joinP(target, String(f.name)) }))
+          .filter((d) => showHidden || !d.name.startsWith("."));
+        all.sort((a, b) => a.name.localeCompare(b.name));
+        truncated = all.length > MAX_ENTRIES;
+        dirs = all.slice(0, MAX_ENTRIES);
       } else {
-        // 兑底：Windows 保留名文件（nul 等）会让 lstat 炸掉整个 listDir（10-29 实踩）；
-        // 改用 shell ls 逐条列（对 nul 免疫）。同样 12s 封顶。失败才真正报错。
+        // 兜底：Windows 保留名文件（nul 等）会让 lstat 炸掉整个 listDir（10-29 实踩）；
+        // 改用 shell ls 逐条列（对 nul 免疫）。只取目录（尾部 /）。同样 12s 封顶。
         try {
           let out = "";
-          const quoted = JSON.stringify(target).slice(1, -1); // JSON 转义近似 shell 双引号安全
-          const er = await new Promise((resolve, reject) => {
-            let done = false;
-            const t = setTimeout(() => { if (!done) reject(new Error("timeout")); }, 12_000);
-            env.exec(
-              `ls -A -F --quoting-style=literal "${quoted}" 2>/dev/null | head -500`,
-              { onOutput: (t2) => { out += t2; } }, context as any,
-            ).then(
-              (v: any) => { done = true; clearTimeout(t); resolve(v); },
-              (e: any) => { done = true; clearTimeout(t); reject(e); },
-            );
-          }) as any;
+          const quoted = JSON.stringify(target).slice(1, -1);
+          const er = await withTimeout(env.exec(
+            `ls -A -F --quoting-style=literal "${quoted}" 2>/dev/null | head -2000`,
+            { onOutput: (t2) => { out += t2; } }, context as any,
+          ), 12_000, "timeout") as any;
           if (!er || !er.ok) throw new Error("exec failed");
-          items = out.split("\n").filter(Boolean).map((line) => {
-            const isDir = line.endsWith("/");
-            const name = isDir ? line.slice(0, -1) : line;
-            // ls -F 还会给可执行加 *、符号链接加 @、套接字加 =——都不算目录
-            const clean = name.replace(/[*@=|]$/, "");
-            return { name: clean, kind: (isDir ? "directory" : "file") as "directory" | "file", size: null };
-          });
+          const all = out.split("\n").filter((l) => l.endsWith("/"))
+            .map((l) => l.slice(0, -1).replace(/[@=|*]$/, ""))
+            .filter((name) => name && (showHidden || !name.startsWith(".")))
+            .map((name) => ({ name, path: joinP(target, name) }));
+          all.sort((a, b) => a.name.localeCompare(b.name));
+          truncated = all.length > MAX_ENTRIES;
+          dirs = all.slice(0, MAX_ENTRIES);
         } catch {
-          return json(res, 502, { error: { code: "list_failed", message: (r && r.error?.message) ? String(r.error.message) : "读取超时或机器离线" } });
+          return json(res, 502, { error: { code: "list_failed", message: (r && r.error?.message) ? String(r.error.message) : "读取失败（机器可能离线）" } });
         }
       }
-      return json(res, 200, { path: target, items });
+      return json(res, 200, { path: target, home, parent, directories: dirs, truncated });
     }
 
     return err(res, 404, "not_found", `no route ${method} ${path}`);
