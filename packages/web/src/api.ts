@@ -5,6 +5,7 @@ import type {
   ConversationSummary,
   CreateConversationRequest,
   SendMessageRequest,
+  UsageToday,
 } from "@dorahub/shared";
 
 function authHeaders(): Record<string, string> {
@@ -93,6 +94,8 @@ export const api = {
     call<{ ok: true }>(`/api/conversations/${encodeURIComponent(conv)}/read`, { method: "POST" }),
 
   pendingConfirmations: () => call<any[]>("/api/confirmations"),
+
+  usageToday: () => call<UsageToday>("/api/usage/today"),
 
   answerConfirmation: (id: string, approved: boolean) =>
     call<{ ok: true }>(`/api/confirmations/${encodeURIComponent(id)}`, {

@@ -858,6 +858,12 @@ a { color: var(--blue); }
 .about-grid { display: grid; grid-template-columns: 84px 1fr; gap: 6px var(--sp-3); font-size: var(--fs-sm); }
 .about-key { color: var(--text-faint); }
 
+/* 今日花费（P1-3）：分模型明细 */
+.usage-models { margin-top: 10px; display: flex; flex-direction: column; gap: 4px; }
+.usage-model-row { display: flex; justify-content: space-between; gap: var(--sp-3); font-size: var(--fs-xs); font-family: var(--mono); }
+.usage-model-name { color: var(--text-dim); }
+.usage-model-meta { color: var(--text-faint); flex: none; }
+
 /* ---- 桌面空态 ---- */
 .welcome-pane {
   flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;

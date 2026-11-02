@@ -7,6 +7,7 @@ import type { Dorahub } from "./dorahub.ts";
 import type { AuditLog } from "./audit.ts";
 import type { ExecRegistry } from "./exec/registry.ts";
 import type { ChannelConfig } from "./channels.ts";
+import { usageToday } from "./usage-day.ts";
 
 export interface HttpApiDeps {
   app: Dorahub;
@@ -186,6 +187,11 @@ export function createRouter(deps: HttpApiDeps) {
     // ---------- 确认 ----------
     if (path === "/api/confirmations" && method === "GET") {
       return json(res, 200, app.pendingConfirmations());
+    }
+
+    // ---------- 今日花费（P1-3）----------
+    if (path === "/api/usage/today" && method === "GET") {
+      return json(res, 200, usageToday());
     }
 
     const confirmMatch = path.match(/^\/api\/confirmations\/([^/]+)$/);

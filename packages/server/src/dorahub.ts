@@ -18,6 +18,7 @@ import type {
 import { context, defaultAgent } from "./harness.ts";
 import { ConvMetaDoc, type ConvMetaState } from "./conv-meta.ts";
 import { AutoNamer, extractUserMessages } from "./auto-namer.ts";
+import { recordUsage } from "./usage-day.ts";
 import type { Models } from "@earendil-works/pi-ai";
 import type { ConversationSummary } from "@dorahub/shared";
 
@@ -600,6 +601,17 @@ export class Dorahub {
         rec.unread = true;
       }
       if (userAppended) this.namer.maybeName(rec.conv);
+    }
+    // 今日花费（P1-3）：截获 assistant 消息的 usage，按天聚合落 hub 侧 JSON。
+    // pi-durable 的 UsageDoc 是 per-conv 累计无时间维度，时间维度 hub 自己记。
+    // 记在扇出之前（广播失败不影响记账）。
+    for (const ev of events) {
+      if (ev.type === "message_end" && (ev.entry as any)?.kind === "pi.assistant") {
+        const msg = (ev.entry as any).model?.[0];
+        if (msg?.usage && msg.provider && msg.model) {
+          recordUsage(msg.provider, msg.model, msg.usage, id);
+        }
+      }
     }
     this.events.onEvents(id, [...events]);
   }

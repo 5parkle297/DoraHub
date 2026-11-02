@@ -33,6 +33,24 @@ export interface ConversationSummary {
   stalledMinutes: number | null;
 }
 
+/** 单模型今日用量（P1-3） */
+export interface ModelUsageToday {
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+  totalTokens: number;
+  costTotal: number;
+  calls: number;
+}
+
+/** /api/usage/today 返回（P1-3） */
+export interface UsageToday {
+  day: string;
+  models: Record<string, ModelUsageToday>;
+  totals: ModelUsageToday & { activeConvs: number };
+}
+
 export interface CreateConversationRequest {
   name?: string;
   cwd?: string;

@@ -8,6 +8,7 @@ import { useEffect, useState } from "react";
 import { api } from "../api.ts";
 import { Modal } from "./Modal.tsx";
 import type { ExecutorInfo } from "@dorahub/shared";
+import type { UsageToday } from "@dorahub/shared";
 
 type Tab = "executors" | "channels" | "about";
 
@@ -109,6 +110,7 @@ function ChannelsTab() {
 
 function AboutTab({ health }: { health: { uptime: number; version: string } | null }) {
   const up = health ? formatUptime(health.uptime) : "…";
+  const usage = useUsageToday();
   return (
     <div className="settings-body">
       <div className="about-grid">
@@ -118,13 +120,46 @@ function AboutTab({ health }: { health: { uptime: number; version: string } | nu
         <span>{up}</span>
         <span className="about-key">接入</span>
         <span>Tailscale 私有网络（tailnet）</span>
+        <span className="about-key">今日花费（{usage?.day ?? "…"}）</span>
+        <span>
+          {usage == null ? "…" : (
+            <>
+              {usage.totals.calls} 次调用 · {fmtTokens(usage.totals.totalTokens)} tokens
+              {usage.totals.costTotal > 0 && <> · ${usage.totals.costTotal.toFixed(4)}</>}
+              {usage.totals.activeConvs > 0 && <> · {usage.totals.activeConvs} 个会话</>}
+            </>
+          )}
+        </span>
       </div>
+      {usage != null && Object.keys(usage.models).length > 0 && (
+        <div className="usage-models">
+          {Object.entries(usage.models).map(([key, m]) => (
+            <div key={key} className="usage-model-row">
+              <span className="usage-model-name">{key}</span>
+              <span className="usage-model-meta">{m.calls} 次 · {fmtTokens(m.totalTokens)}{m.costTotal > 0 && <> · ${m.costTotal.toFixed(4)}</>}</span>
+            </div>
+          ))}
+        </div>
+      )}
       <div className="settings-hint">
         DoraHub：会话状态住在云端 VM，任何设备用浏览器接入同一个 agent 会话。
         会话数据只增不删；软删除只隐藏列表项。
       </div>
     </div>
   );
+}
+
+/** 今日花费（P1-3）：挂载时拉一次（轻量端点，不值得 WS 推） */
+function useUsageToday() {
+  const [usage, setUsage] = useState<UsageToday | null>(null);
+  useEffect(() => {
+    api.usageToday().then(setUsage).catch(() => {});
+  }, []);
+  return usage;
+}
+
+function fmtTokens(n: number): string {
+  return n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 10_000 ? `${Math.round(n / 1000)}k` : String(n);
 }
 
 function formatUptime(ms: number): string {
