@@ -864,6 +864,12 @@ a { color: var(--blue); }
 .usage-model-name { color: var(--text-dim); }
 .usage-model-meta { color: var(--text-faint); flex: none; }
 
+/* 发送失败重试条（P1-5）：文本不丢，行内给动作 */
+.send-failed-bar { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); padding: 6px 10px; margin-bottom: 6px; border-radius: var(--r-sm); background: var(--yellow-soft); color: var(--yellow); font-size: var(--fs-xs); }
+.send-failed-actions { display: inline-flex; gap: 6px; }
+.send-failed-actions .btn.sm { padding: 2px 10px; font-size: var(--fs-xs); }
+.composer-failed { border-color: var(--yellow); }
+
 /* 目录浏览器（P1-4）：新建弹窗内嵌面板 */
 .dir-browser { margin-top: 10px; border: 1px solid var(--line); border-radius: var(--r-md); overflow: hidden; }
 .dir-crumbs { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-bottom: 1px solid var(--line); background: var(--bg-raised); flex-wrap: wrap; }

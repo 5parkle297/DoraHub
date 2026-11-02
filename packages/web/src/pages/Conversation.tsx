@@ -33,6 +33,7 @@ export function ConversationPage({ id }: { id: string }) {
   const [convCwd, setConvCwd] = useState<string | null>(null);
   const [executors, setExecutors] = useState<ExecutorInfo[]>([]);
   const [migrationDraft, setMigrationDraft] = useState("");
+  const [stalledMinutes, setStalledMinutes] = useState<number | null>(null); // P1-2 卡死徽章
   const scrollRef = useRef<HTMLDivElement>(null);
   const wide = useIsWide();
   const [modelOpen, setModelOpen] = useState(false);
@@ -57,8 +58,7 @@ export function ConversationPage({ id }: { id: string }) {
     wsClient.send({ t: "read", conv: id });
     api.markRead(id).catch(() => {}); // HTTP 兜底（WS 未连时也能标）
 
-    const [stalledMinutes, setStalledMinutes] = useState<number | null>(null);
-  const unsub = wsClient.subscribe({
+    const unsub = wsClient.subscribe({
       onFrame: (f) => {
         if (f.t === "snapshot" && f.conv === id) {
           dispatch({ type: "snapshot", snap: f.snapshot });
@@ -303,7 +303,8 @@ export function ConversationPage({ id }: { id: string }) {
             await api.send(id, { content: text, mode });
             setError("");
           } catch (e: any) {
-            setError(e.message);
+            setError(`发送失败：${e.message}`);
+            throw e; // 往上抛 → Composer 重试条（P1-5）
           }
         }}
       />
