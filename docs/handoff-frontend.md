@@ -76,6 +76,20 @@
 
 **P1 待办**（下会话，见 reference-sig-analysis.md §4.2）：spec.md 功能需求文档 → 卡死检测 → 今日花费 → 目录浏览器 → 失联语义 → 发送失败重试 → 会话摘要面板。
 
+### ✅ P1 批次进度（2026-11-02，已完成 4/7，未发版）
+
+| 项 | 状态 | 备注 |
+|---|---|---|
+| P1-6 spec.md | ✅ | docs/spec.md（功能需求层：用户/场景/原则/概念表/三态模型/自主性边界/验收基线/旅程级验收清单）|
+| P1-2 卡死检测 | ✅ | running 15 分钟无事件 → 列表卡/会话页「⏸ N 分钟没动静」amber 徽章；conv_stalled 广播帧；DORAHUB_STALL_MS 可覆盖；p1-stall-e2e 7/7 + p1-stall-ui 4/4 |
+| P1-3 今日花费 | ✅ | /api/usage/today（事件流截获 assistant usage，hub 侧 JSON 按天聚合+90天治理）；设置「关于」页总量+分模型；p1-usage-e2e 9/9 + p1-usage-ui 6/6 |
+| P1-4 目录浏览器 | ✅ | 新建弹窗「浏览」→ 面包屑+列表；/api/executors/:env/browse；nul 保留名 ls 兑底 + 离线秒拒 + 12s 超时；p1-browse-ui 10/10 |
+| P1-1 失联语义 | ⏳ 未做 | 工作量最大（per-env 会话状态机 + steer 排队 + 重连对账）|
+| P1-5 发送重试 | ⏳ 未做 | |
+| P1-7 摘要面板 | ⏳ 未做 | |
+
+**P1 新增坑 #35-38**：见 §6。**发现的产品缺口（待拍板）**：手机列表页无新建按钮（「＋」只在桌面 header；手机目前只有零会话空态指引可达新建）——是否给手机 header 加「＋」待用户定。
+
 ### 下会话开场 prompt（复制即用）
 
 ```
@@ -285,6 +299,10 @@ web/src/
 32. **puppeteer emulateMediaType("dark") 已废弃**：用 `page.emulateMediaFeatures([{ name: "prefers-color-scheme", value: "dark" }])`，深色截图用这个
 33. **测试脚本里的 `wait()` 若接收的是数组快照（filter/map 结果），后续新增帧不会出现**（10-26 踩）：wait 轮询的必须是原始可变数组引用，或每次轮询重新 filter。场景3 误报“零投递”就是这么来的
 34. **p0-ui-* 脚本不能并行跑**（10-29 验收踩）：它们共享同一个 preview(4399) + 9222 调试浏览器，并行会互改视口/互点按钮，出现假失败（如「手机无设置齿轮」误挂）；且中途崩溃的 waiting-e2e 会残留 pending 确认卡污染「等你」区（1839 事件），下次先 `GET /api/confirmations` 清残留再跑
+35. **Promise.race 输掉一方的悬空 reject 会杀进程**（11-02 踩）：`Promise.race([p, timeoutPromise])` 里 p 先成功后，timeout 定时器到点 reject 无人接住 → unhandledRejection → Node 默认退出。browse 接口第一次成功调用后 server 静默死就是这个。写法：包一层 done 标志 + clearTimeout（http-api.ts browse 端点是范例）
+36. **bash 子 shell 后台进程会被工具会话收割**（11-02 踩）：`(nohup bash dev-server.sh > log 2>&1 &)` 在本环境里 tool 调用结束就死，且无 crash 日志。用 `powershell Start-Process -FilePath 'D:\\EESoftware\\Git\\bin\\bash.exe' -ArgumentList 'dev-server.sh' -WorkingDirectory ... -RedirectStandardOutput ...`（注意 Git Bash 装在 D:/EESoftware，不在 C:/Program Files）
+37. **Windows 保留名文件（nul）炸整个 listDir**（11-02 踩）：workpc 用户目录有历史遗留 nul 垃圾文件，daemon listDir 的 lstat 一碰就 EISDIR，整个目录列不了。兑底：shell `ls -A -F`（对 nul 免疫），见 http-api.ts browse。根治：去 workpc 删掉 `C:\\Users\\shiyu\\nul`（`rm '\\\\.\\nul'` 或 del '\\\\?\\C:\\Users\\shiyu\\nul'）
+38. **探测缓存 60s 新鲜窗口 ≠ 机器真离线**（11-02 踩）：browse 前置 lastSeen 检查会在机器刚上线但探测缓存过期时误拒（502 offline）。交互代价小（用户重试即通，重试时后台探测已刷新），但要知道这个边界。执行机探测 5s 超时+30s 节流，离线机探测要分钟级
 
 ## 7. 验收基线（重设计改完必须仍然全过）
 
