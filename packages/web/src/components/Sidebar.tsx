@@ -114,6 +114,9 @@ function ConversationsInner() {
         } else if (f.t === "attention") {
           // 等你处理数变化（不 attach 也能收到，P0-2）
           setConvs((cs) => cs.map((c) => (c.id === f.conv ? { ...c, pendingConfirms: f.pending } : c)));
+        } else if (f.t === "conv_stalled") {
+          // 卡死状态变化（P1-2）：running 会话长时间无事件，广播给所有连接
+          setConvs((cs) => cs.map((c) => (c.id === f.conv ? { ...c, stalledMinutes: f.minutes } : c)));
         }
       },
     });

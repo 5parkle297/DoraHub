@@ -43,7 +43,10 @@ export function ConvCard({
         {conv.pendingConfirms > 0 && (
           <span className="badge-waiting" title="有确认请求等你处理">◆ 等你 ×{conv.pendingConfirms}</span>
         )}
-        {conv.status === "running" && <span className="badge-running">● 运行中</span>}
+        {conv.status === "running" && conv.stalledMinutes == null && <span className="badge-running">● 运行中</span>}
+        {conv.stalledMinutes != null && (
+          <span className="badge-stalled" title="运行中但长时间没有新事件——可能卡住了，建议进来看看">⏸ {conv.stalledMinutes} 分钟没动静</span>
+        )}
         <span className="conv-time">{relTime(conv.updatedAt)}</span>
         {confirming ? (
           <>

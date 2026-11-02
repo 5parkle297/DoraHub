@@ -127,6 +127,7 @@ async function main() {
     onConfirmationResolved: (conv, id, approved) => wsBus?.onConfirmationResolved(conv, id, approved),
     onRead: (conv) => wsBus?.onRead(conv),
     onAttention: (conv, pending) => wsBus?.onAttention(conv, pending),
+    onStalled: (conv, minutes) => wsBus?.onStalled(conv, minutes),
   }, { defaultCwd: cwd, defaultModelId: modelId, models });
 
   await app.start();

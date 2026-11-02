@@ -910,6 +910,13 @@ a { color: var(--blue); }
   border-radius: var(--r-sm); padding: 1px 7px; flex: none;
 }
 
+/* 卡死徽章（P1-2）：amber 静态（不脉冲——没动静就是没动静，别装活跃） */
+.badge-stalled {
+  color: var(--yellow); background: var(--yellow-soft);
+  font-size: var(--fs-xs); font-weight: 600; font-family: var(--mono);
+  border-radius: var(--r-sm); padding: 1px 7px; flex: none;
+}
+
 /* 「等你处理」聚合入口（P0-2）：header 徽章按钮 + 弹出列表 */
 .needs-you-btn {
   display: inline-flex; align-items: center; gap: 6px;

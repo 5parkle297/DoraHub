@@ -57,12 +57,15 @@ export function ConversationPage({ id }: { id: string }) {
     wsClient.send({ t: "read", conv: id });
     api.markRead(id).catch(() => {}); // HTTP 兜底（WS 未连时也能标）
 
-    const unsub = wsClient.subscribe({
+    const [stalledMinutes, setStalledMinutes] = useState<number | null>(null);
+  const unsub = wsClient.subscribe({
       onFrame: (f) => {
         if (f.t === "snapshot" && f.conv === id) {
           dispatch({ type: "snapshot", snap: f.snapshot });
+          setStalledMinutes(null); // 新快照重置（进入页面/重连时从服务端真相重新推导）
         } else if (f.t === "events" && f.conv === id) {
           dispatch({ type: "events", events: f.events });
+          setStalledMinutes(null); // 事件到达 = 没卡死
         } else if (f.t === "confirmation" && f.conv === id) {
           setConfirmations((cs) => [...cs.filter((c) => c.id !== f.confirm.id), f.confirm]);
           navigator.vibrate?.(200);
@@ -72,6 +75,8 @@ export function ConversationPage({ id }: { id: string }) {
           // 自动命名完成 → 无刷新换标题（S5）
           setConvName(f.name);
           if (f.envId !== undefined) setEnvId(f.envId);
+        } else if (f.t === "conv_stalled" && f.conv === id) {
+          setStalledMinutes(f.minutes);
         }
       },
     });
@@ -200,7 +205,10 @@ export function ConversationPage({ id }: { id: string }) {
               )}
             </>
           )}
-          {state.status === "running" && <span className="badge-running">▶ 运行中</span>}
+          {state.status === "running" && stalledMinutes == null && <span className="badge-running">▶ 运行中</span>}
+          {stalledMinutes != null && (
+            <span className="badge-stalled" title="运行中但长时间没有新事件——可能卡住了">⏸ {stalledMinutes} 分钟没动静</span>
+          )}
         </div>
         <div className="conv-actions">
           {wide && state.status === "running" && (

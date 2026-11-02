@@ -29,6 +29,8 @@ export interface ConversationSummary {
   unread: boolean;
   /** 等你处理的确认卡数（服务端从确认队列派生，P0-2） */
   pendingConfirms: number;
+  /** 卡死检测（P1-2）：running 状态超过阈值无事件，服务端派生 */
+  stalledMinutes: number | null;
 }
 
 export interface CreateConversationRequest {
@@ -124,6 +126,7 @@ export type SrvFrame =
   | { t: "conv_meta"; conv: string; name: string; description: string | null; keywords: string[]; envId: string | null }
   | { t: "conv_read"; conv: string } // 未读清除广播（P0-1，所有设备同步）
   | { t: "attention"; conv: string; pending: number } // 会话等你处理数变化（P0-2，不 attach 也能收到）
+  | { t: "conv_stalled"; conv: string; minutes: number | null } // 卡死状态变化（P1-2；null = 恢复，广播给所有连接）
   | { t: "confirmation"; conv: string; confirm: ConfirmationItem }
   | { t: "confirm_resolved"; conv: string; id: string; approved: boolean }
   | { t: "pong" }

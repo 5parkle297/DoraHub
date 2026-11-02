@@ -35,6 +35,8 @@ export interface DorahubEvents {
   onRead(conv: string): void;
   /** 会话等你处理数变化（确认队列增减，P0-2——不 attach 该会话的设备也要收到） */
   onAttention(conv: string, pending: number): void;
+  /** 卡死状态变化（P1-2）：minutes 非 null = 进入卡死；null = 恢复 */
+  onStalled(conv: string, minutes: number | null): void;
 }
 
 interface ConvRecord {
@@ -55,6 +57,10 @@ interface ConvRecord {
   sourcePiKey: string | null;
   /** 未读：有新动静（assistant 事件）但没人 markRead（P0-1） */
   unread: boolean;
+  /** 最后一次收到该会话任何事件的时间（P1-2 卡死检测基数） */
+  lastEventAt: number;
+  /** 卡死检测（P1-2）：running 且超过 STALL_WARN_MS 无事件 → 派生 stalledMinutes */
+  stalledSince: number | null;
 }
 
 /** 确认等待者 */
@@ -105,6 +111,35 @@ export class Dorahub {
       }
       this.events.onMeta(convId, { name: title, description, keywords, envId: rec?.meta.envId ?? null });
     };
+    // 卡死检测扫描（P1-2）：每分钟扫一次，running 且超阈值无事件 → 标 stalled。
+    // 不主动 abort（判断卡不卡是人的职责，系统只负责让状态诚实）；事件恢复时自动清。
+    this.stallTimer = setInterval(() => this.scanStalled(), 60_000);
+    this.stallTimer.unref();
+  }
+
+  private stallTimer: ReturnType<typeof setInterval>;
+  /** running 会话无事件多久算「卡死」警报（P1-2，分析报告建议 15-20 分钟）。
+   * DORAHUB_STALL_MS 环境变量可覆盖（测试用；生产默认 15 分钟） */
+  static readonly STALL_WARN_MS = Number(process.env.DORAHUB_STALL_MS) > 0
+    ? Number(process.env.DORAHUB_STALL_MS)
+    : 15 * 60_000;
+
+  /** 扫描卡死：状态变化时广播 conv_stalled 帧（无变化不发射，避免噪声） */
+  private scanStalled() {
+    const now = Date.now();
+    for (const [id, rec] of this.convs) {
+      if (rec.status !== "running") {
+        if (rec.stalledSince != null) rec.stalledSince = null; // run_end 到达但扫描晚于事件时克的清理
+        continue;
+      }
+      const silent = now - rec.lastEventAt;
+      if (silent >= Dorahub.STALL_WARN_MS) {
+        if (rec.stalledSince == null) {
+          rec.stalledSince = now;
+          this.events.onStalled(id, Math.max(1, Math.floor((now - rec.lastEventAt) / 60_000)));
+        }
+      }
+    }
   }
 
   /** 启动：注册 root + 扫描已有会话（重启用）。 */
@@ -204,6 +239,8 @@ export class Dorahub {
       cwd,
       sourcePiKey,
       unread: false,
+      lastEventAt: Date.now(),
+      stalledSince: null,
     });
   }
 
@@ -229,6 +266,9 @@ export class Dorahub {
         envId: r.meta.envId && r.meta.envId !== "hub" ? r.meta.envId : null,
         unread: r.unread,
         pendingConfirms: pendingByConv.get(String(r.conv.id)) ?? 0,
+        stalledMinutes: r.status === "running" && r.stalledSince != null
+          ? Math.max(1, Math.floor((Date.now() - r.stalledSince) / 60_000))
+          : null,
       }));
   }
 
@@ -527,6 +567,12 @@ export class Dorahub {
   private async handleStreamEvents(id: string, events: readonly AgentEvent[]) {
     const rec = this.convs.get(id);
     if (rec) {
+      rec.lastEventAt = Date.now(); // P1-2 卡死检测基数
+      if (rec.stalledSince != null) {
+        // 事件恢复了：清卡死标（事件到达先于扫描的情况，如长时间 thinking 后恢复）
+        rec.stalledSince = null;
+        this.events.onStalled(id, null);
+      }
       let running = rec.status;
       let userAppended = false;
       for (const ev of events) {

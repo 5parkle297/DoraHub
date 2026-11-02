@@ -199,6 +199,11 @@ export function attachWs(server: HttpServer, app: Dorahub, audit: AuditLog) {
       const frame: SrvFrame = { t: "attention", conv, pending };
       for (const client of clients) send(client.ws, frame);
     },
+    onStalled(conv: string, minutes: number | null) {
+      // 广播给所有连接（P1-2）：列表页/会话页都要能看到卡死状态变化
+      const frame: SrvFrame = { t: "conv_stalled", conv, minutes };
+      for (const client of clients) send(client.ws, frame);
+    },
     close() {
       clearInterval(heartbeat);
       for (const client of clients) {
