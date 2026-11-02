@@ -62,6 +62,10 @@ interface ConvRecord {
   lastEventAt: number;
   /** 卡死检测（P1-2）：running 且超过 STALL_WARN_MS 无事件 → 派生 stalledMinutes */
   stalledSince: number | null;
+  /** 本轮运行统计（P1-7 摘要面板：服务端也数事件，页面刷新后仍可展示最近一轮） */
+  runStats?: { startedAt: number; toolCalls: number; toolErrors: number; replies: number; userInputs: number; lastText: string };
+  /** 最近一轮收尾汇报（run_end 消费 runStats 生成，与前端 RunReport 同构） */
+  lastReport?: { at: number; tone: "done" | "attention" | "failed"; toolCalls: number; toolErrors: number; replies: number; userInputs: number; lastText: string; durationMs: number };
 }
 
 /** 确认等待者 */
@@ -270,6 +274,7 @@ export class Dorahub {
         stalledMinutes: r.status === "running" && r.stalledSince != null
           ? Math.max(1, Math.floor((Date.now() - r.stalledSince) / 60_000))
           : null,
+        lastReport: r.lastReport ?? null,
       }));
   }
 
@@ -577,13 +582,45 @@ export class Dorahub {
       let running = rec.status;
       let userAppended = false;
       for (const ev of events) {
-        if (ev.type === "run_start") running = "running";
-        if (ev.type === "run_end") running = "idle";
+        if (ev.type === "run_start") {
+          running = "running";
+          // P1-7：新一轮开跑重置统计（与前端 reducer 同构）
+          rec.runStats = { startedAt: Date.now(), toolCalls: 0, toolErrors: 0, replies: 0, userInputs: 0, lastText: "" };
+        }
+        if (ev.type === "run_end") {
+          running = "idle";
+          // P1-7：消费成本轮收尾汇报（服务端真相，页面刷新不丢）
+          const s = rec.runStats;
+          if (s && (s.replies > 0 || s.toolCalls > 0)) {
+            rec.lastReport = {
+              at: Date.now(),
+              tone: s.toolErrors > 0 ? "attention" : "done", // 服务端看不到 alert（前端态），failed 由前端补
+              toolCalls: s.toolCalls, toolErrors: s.toolErrors, replies: s.replies,
+              userInputs: s.userInputs, lastText: s.lastText.slice(0, 120),
+              durationMs: Date.now() - s.startedAt,
+            };
+          }
+          rec.runStats = undefined;
+        }
         if (ev.type === "submission" && ev.record.status === "done") {
           rec.updatedAt = Date.now();
         }
         if (ev.type === "entry_appended" && (ev.entry as any)?.kind === "pi.user") {
           userAppended = true;
+          if (rec.runStats) rec.runStats.userInputs += 1;
+        }
+        // P1-7 统计：工具/回复/结论行（与前端 reducer 口径一致）
+        if (ev.type === "tool_execution_end" && rec.runStats) {
+          rec.runStats.toolCalls += 1;
+          if (!(ev.result as any)?.ok) rec.runStats.toolErrors += 1;
+        }
+        if (ev.type === "message_end" && (ev.entry as any)?.kind === "pi.assistant" && rec.runStats) {
+          rec.runStats.replies += 1;
+          const blocks = (ev.entry as any).model?.[0]?.content;
+          if (Array.isArray(blocks)) {
+            const txt = blocks.filter((b: any) => b.type === "text").map((b: any) => b.text).join("").trim();
+            if (txt) rec.runStats.lastText = txt;
+          }
         }
       }
       if (running !== rec.status) {

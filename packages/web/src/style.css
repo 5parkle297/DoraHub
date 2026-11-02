@@ -864,6 +864,23 @@ a { color: var(--blue); }
 .usage-model-name { color: var(--text-dim); }
 .usage-model-meta { color: var(--text-faint); flex: none; }
 
+/* 会话摘要面板（P1-7）：⋯ 菜单「会话详情」 */
+.conv-summary { position: fixed; top: 64px; right: 16px; width: min(360px, calc(100vw - 32px)); max-height: calc(100vh - 96px); overflow-y: auto; background: var(--bg-raised); border: 1px solid var(--line); border-radius: var(--r-md); box-shadow: var(--shadow-pop); z-index: 1000; }
+.conv-summary-head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); padding: 10px 12px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--bg-raised); }
+.conv-summary-title { font-weight: 700; font-size: var(--fs-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.conv-summary-body { padding: 12px; display: flex; flex-direction: column; gap: 12px; }
+.summary-grid { display: grid; grid-template-columns: 64px 1fr; gap: 4px var(--sp-3); font-size: var(--fs-sm); }
+.summary-mono { font-family: var(--mono); font-size: var(--fs-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.summary-section { display: flex; flex-direction: column; gap: 4px; }
+.summary-label { font-size: var(--fs-xs); color: var(--text-faint); font-weight: 600; }
+.summary-desc { font-size: var(--fs-sm); color: var(--text-dim); line-height: 1.5; }
+.summary-desc.dim { color: var(--text-faint); }
+.summary-report { display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; }
+.summary-report .run-done { color: var(--green); font-weight: 700; font-size: var(--fs-sm); }
+.summary-report .run-attention { color: var(--yellow); font-weight: 700; font-size: var(--fs-sm); }
+.summary-report .run-failed { color: var(--red); font-weight: 700; font-size: var(--fs-sm); }
+.summary-report-meta { font-size: var(--fs-xs); color: var(--text-faint); font-family: var(--mono); }
+
 /* 发送失败重试条（P1-5）：文本不丢，行内给动作 */
 .send-failed-bar { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); padding: 6px 10px; margin-bottom: 6px; border-radius: var(--r-sm); background: var(--yellow-soft); color: var(--yellow); font-size: var(--fs-xs); }
 .send-failed-actions { display: inline-flex; gap: 6px; }

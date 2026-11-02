@@ -76,7 +76,7 @@
 
 **P1 待办**（下会话，见 reference-sig-analysis.md §4.2）：spec.md 功能需求文档 → 卡死检测 → 今日花费 → 目录浏览器 → 失联语义 → 发送失败重试 → 会话摘要面板。
 
-### ✅ P1 批次进度（2026-11-02，已完成 4/7，未发版）
+### ✅ P1 批次进度（2026-11-02，已完成 6/7，未发版）
 
 | 项 | 状态 | 备注 |
 |---|---|---|
@@ -84,9 +84,9 @@
 | P1-2 卡死检测 | ✅ | running 15 分钟无事件 → 列表卡/会话页「⏸ N 分钟没动静」amber 徽章；conv_stalled 广播帧；DORAHUB_STALL_MS 可覆盖；p1-stall-e2e 7/7 + p1-stall-ui 4/4 |
 | P1-3 今日花费 | ✅ | /api/usage/today（事件流截获 assistant usage，hub 侧 JSON 按天聚合+90天治理）；设置「关于」页总量+分模型；p1-usage-e2e 9/9 + p1-usage-ui 6/6 |
 | P1-4 目录浏览器 | ✅ | 新建弹窗「浏览」→ 面包屑+列表；/api/executors/:env/browse；nul 保留名 ls 兑底 + 离线秒拒 + 12s 超时；p1-browse-ui 10/10 |
-| P1-1 失联语义 | ⏳ 未做 | 工作量最大（per-env 会话状态机 + steer 排队 + 重连对账）|
-| P1-5 发送重试 | ⏳ 未做 | |
-| P1-7 摘要面板 | ⏳ 未做 | |
+| P1-5 发送重试 | ✅ | 失败保留文本+行内错误条（重试/知道了）；p1-retry-ui 9/9（CDP failRequest 模拟）；修 P1-2 白屏残留（useState 插错位置）+ 新增 smoke-conversation.mjs 冒烟防线 |
+| P1-7 摘要面板 | ✅ | ⋯菜单「会话详情」：基础信息/描述/关键词/最近一轮；lastReport 服务端派生（handleStreamEvents 数事件，刷新不丢）；p1-summary-ui 9/9 |
+| P1-1 失联语义 | ⏳ 未做 | 工作量最大（per-env 会话状态机 + steer 排队 + 重连对账），留独立会话 |
 
 **P1 新增坑 #35-38**：见 §6。**发现的产品缺口（待拍板）**：手机列表页无新建按钮（「＋」只在桌面 header；手机目前只有零会话空态指引可达新建）——是否给手机 header 加「＋」待用户定。
 

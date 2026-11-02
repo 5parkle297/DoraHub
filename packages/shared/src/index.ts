@@ -31,6 +31,8 @@ export interface ConversationSummary {
   pendingConfirms: number;
   /** 卡死检测（P1-2）：running 状态超过阈值无事件，服务端派生 */
   stalledMinutes: number | null;
+  /** 最近一轮收尾汇报（P1-7：服务端数事件派生，页面刷新不丢） */
+  lastReport: { at: number; tone: "done" | "attention" | "failed"; toolCalls: number; toolErrors: number; replies: number; userInputs: number; lastText: string; durationMs: number } | null;
 }
 
 /** 单模型今日用量（P1-3） */

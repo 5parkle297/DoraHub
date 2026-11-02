@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { api } from "../api.ts";
 import { wsClient } from "../ws.ts";
 import { navigate, useIsWide } from "../route.ts";
+import { relTime } from "../util/time.ts";
 import { initialConvState, applySnapshot, applyEvents, type ConvState } from "../state/conv.ts";
 import { MessageBubble } from "../components/MessageBubble.tsx";
 import { Composer } from "../components/Composer.tsx";
@@ -34,10 +35,13 @@ export function ConversationPage({ id }: { id: string }) {
   const [executors, setExecutors] = useState<ExecutorInfo[]>([]);
   const [migrationDraft, setMigrationDraft] = useState("");
   const [stalledMinutes, setStalledMinutes] = useState<number | null>(null); // P1-2 卡死徽章
+  const [summaryMeta, setSummaryMeta] = useState<{ description: string | null; keywords: string[] }>({ description: null, keywords: [] }); // P1-7
+  const [summaryLastReport, setSummaryLastReport] = useState<import("../state/conv.ts").RunReport | null>(null); // P1-7：服务端真相
   const scrollRef = useRef<HTMLDivElement>(null);
   const wide = useIsWide();
   const [modelOpen, setModelOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [summaryOpen, setSummaryOpen] = useState(false); // P1-7 会话摘要面板
 
   const refreshExecutors = () => api.executors().then(setExecutors).catch(() => {});
   // 首次：HTTP snapshot；随后 WS attach
@@ -72,8 +76,9 @@ export function ConversationPage({ id }: { id: string }) {
         } else if (f.t === "confirm_resolved" && f.conv === id) {
           setConfirmations((cs) => cs.filter((c) => c.id !== f.id));
         } else if (f.t === "conv_meta" && f.conv === id) {
-          // 自动命名完成 → 无刷新换标题（S5）
+          // 自动命名完成 → 无刷新换标题（S5）；描述/关键词进摘要面板（P1-7）
           setConvName(f.name);
+          setSummaryMeta({ description: f.description, keywords: f.keywords });
           if (f.envId !== undefined) setEnvId(f.envId);
         } else if (f.t === "conv_stalled" && f.conv === id) {
           setStalledMinutes(f.minutes);
@@ -120,6 +125,8 @@ export function ConversationPage({ id }: { id: string }) {
         if (c.name) setConvName(c.name);
         setEnvId(c.envId);
         setConvCwd(c.cwd);
+        setSummaryMeta({ description: c.description, keywords: c.keywords }); // P1-7
+        setSummaryLastReport(c.lastReport ?? null); // P1-7 服务端收尾汇报
       }
     }).catch(() => {});
     api.executors().then(setExecutors).catch(() => {});
@@ -235,6 +242,7 @@ export function ConversationPage({ id }: { id: string }) {
             modelId={agentInfo.modelId ?? ""}
             onClose={() => setMenuOpen(false)}
             onSwitchModel={() => { setMenuOpen(false); setModelOpen(true); }}
+            onSummary={() => { setMenuOpen(false); setSummaryOpen(true); }}
             onAbort={() => { setMenuOpen(false); api.abort(id).catch((e) => setError(e.message)); }}
             onFork={async () => {
               setMenuOpen(false);
@@ -256,6 +264,21 @@ export function ConversationPage({ id }: { id: string }) {
           forceOpen
           onConfigured={() => setAgentTick((n) => n + 1)}
           onClose={() => setModelOpen(false)}
+        />
+      )}
+
+      {summaryOpen && (
+        <ConvSummaryPanel
+          convId={id}
+          name={convName}
+          description={summaryMeta?.description ?? null}
+          keywords={summaryMeta?.keywords ?? []}
+          envId={envId}
+          cwd={convCwd}
+          model={agentInfo.modelId ? `${agentInfo.provider ?? ""}/${agentInfo.modelId}` : null}
+          lastReport={summaryLastReport ?? state.lastRunReport}
+          entryCount={state.entries.length}
+          onClose={() => setSummaryOpen(false)}
         />
       )}
 
@@ -320,6 +343,7 @@ function ConvMenu({
   modelId,
   onClose,
   onSwitchModel,
+  onSummary,
   onAbort,
   onFork,
 }: {
@@ -328,6 +352,7 @@ function ConvMenu({
   modelId: string;
   onClose: () => void;
   onSwitchModel: () => void;
+  onSummary: () => void;
   onAbort: () => void;
   onFork: () => void;
 }) {
@@ -348,9 +373,92 @@ function ConvMenu({
           </>
         )}
         <button className="menu-item" onClick={onFork}>⑂ 在最新消息处分叉</button>
+        <button className="menu-item" onClick={onSummary}>▤ 会话详情</button>
         {!wide && (
           <button className="menu-item" onClick={onClose}>返回列表</button>
         )}
+      </div>
+    </>,
+    document.body,
+  );
+}
+
+/** 会话摘要面板（P1-7）：⋯ 菜单「会话详情」——描述/关键词/工具统计/基础信息。
+ * 数据全部现成（conv_meta + lastRunReport + 会话基础），只做聚合展示不调 LLM。
+ * IA 不动（不新增栏位），portal 弹出（坑 #1）。 */
+function ConvSummaryPanel({
+  convId,
+  name,
+  description,
+  keywords,
+  envId,
+  cwd,
+  model,
+  lastReport,
+  entryCount,
+  onClose,
+}: {
+  convId: string;
+  name: string;
+  description: string | null;
+  keywords: string[];
+  envId: string | null;
+  cwd: string | null;
+  model: string | null;
+  lastReport: import("../state/conv.ts").RunReport | null;
+  entryCount: number;
+  onClose: () => void;
+}) {
+  return createPortal(
+    <>
+      <div className="menu-mask" onClick={onClose} />
+      <div className="conv-summary">
+        <div className="conv-summary-head">
+          <span className="conv-summary-title">{name || "新会话"}</span>
+          <button className="btn ghost" onClick={onClose}>✕</button>
+        </div>
+        <div className="conv-summary-body">
+          <div className="summary-grid">
+            <span className="about-key">执行机</span>
+            <span>{envId || "hub"}</span>
+            <span className="about-key">目录</span>
+            <span className="summary-mono" title={cwd ?? undefined}>{cwd ?? "—"}</span>
+            <span className="about-key">模型</span>
+            <span>{model ?? "—"}</span>
+            <span className="about-key">消息数</span>
+            <span>{entryCount}</span>
+          </div>
+          {description && (
+            <div className="summary-section">
+              <div className="summary-label">摘要</div>
+              <div className="summary-desc">{description}</div>
+            </div>
+          )}
+          {keywords.length > 0 && (
+            <div className="summary-section">
+              <div className="summary-label">关键词</div>
+              <div className="conv-keywords">
+                {keywords.map((k, i) => <span key={i} className="kw-chip">{k}</span>)}
+              </div>
+            </div>
+          )}
+          <div className="summary-section">
+            <div className="summary-label">最近一轮</div>
+            {lastReport ? (
+              <div className="summary-report">
+                <span className={`run-${lastReport.tone === "done" ? "done" : lastReport.tone === "attention" ? "attention" : "failed"}`}>
+                  {lastReport.tone === "done" ? "✓ 完成" : lastReport.tone === "attention" ? "⚠ 需注意" : "✗ 失败"}
+                </span>
+                <span className="summary-report-meta">
+                  {lastReport.toolCalls} 次工具 · {lastReport.replies} 条回复 · {Math.round(lastReport.durationMs / 1000)} 秒
+                  {lastReport.at ? ` · ${relTime(lastReport.at)}` : ""}
+                </span>
+              </div>
+            ) : (
+              <div className="summary-desc dim">这个会话还没有跑过完整一轮。</div>
+            )}
+          </div>
+        </div>
       </div>
     </>,
     document.body,
