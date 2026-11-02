@@ -75,9 +75,10 @@ export function App() {
   );
 }
 
-/** 手机列表页 header 右侧：等你处理入口（P0-4 手机等价第一刀）。 */
+/** 手机列表页 header 右侧：等你处理入口 + 执行机状态（P0-4 手机等价第一刀）。 */
 function MobileHeaderExtras() {
   const [convs, setConvs] = useState<import("@dorahub/shared").ConversationSummary[]>([]);
+  const [machines, setMachines] = useState<{ online: number; total: number } | null>(null);
   useEffect(() => {
     api.listConversations().then(setConvs).catch(() => {});
     const unsub = wsClient.subscribe({
@@ -91,15 +92,48 @@ function MobileHeaderExtras() {
     });
     return unsub;
   }, []);
-  return <NeedsYouButton convs={convs} />;
+  useEffect(() => {
+    const tick = () => api.executors().then((es) => {
+      setMachines({ online: es.filter((e) => e.online).length, total: es.length });
+    }).catch(() => {});
+    tick();
+    const t = setInterval(tick, 30_000);
+    return () => clearInterval(t);
+  }, []);
+  return (
+    <>
+      <NeedsYouButton convs={convs} />
+      {machines && machines.online < machines.total && (
+        <span className="machines-badge warn" title={`${machines.online}/${machines.total} 台执行机在线`}>
+          ▷ {machines.online}/{machines.total}
+        </span>
+      )}
+      {/* 新建是驾驶动作不是管理动作——手机等价（IA 补口，用户 11-02 拍板「一并精进」） */}
+      <button
+        className="btn primary mobile-new-btn"
+        title="新建会话"
+        onClick={() => window.dispatchEvent(new CustomEvent("dorahub:new-conv"))}
+      >
+        ＋
+      </button>
+    </>
+  );
 }
 
-/** 左栏头部：品牌 + 等你处理 + 设置 + 新建（桌面）。 */
+/** 左栏头部：品牌 + 等你处理 + 执行机状态 + 设置 + 新建（桌面）。 */
 function SidebarHeader() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [convs, setConvs] = useState<import("@dorahub/shared").ConversationSummary[]>([]);
+  const [machines, setMachines] = useState<{ online: number; total: number } | null>(null);
   useEffect(() => {
     api.listConversations().then(setConvs).catch(() => {});
+    // 执行机全局可见（对齐 Sig 顶栏 Machines N/N）：不进设置也能看到几台在线。
+    // 30s 轮询（探测缓存 60s 窗口，别打太频）
+    const tick = () => api.executors().then((es) => {
+      setMachines({ online: es.filter((e) => e.online).length, total: es.length });
+    }).catch(() => {});
+    tick();
+    const t = setInterval(tick, 30_000);
     const unsub = wsClient.subscribe({
       onFrame: (f) => {
         if (f.t === "attention") {
@@ -109,7 +143,7 @@ function SidebarHeader() {
         }
       },
     });
-    return unsub;
+    return () => { clearInterval(t); unsub(); };
   }, []);
   return (
     <header className="list-header">
@@ -121,6 +155,16 @@ function SidebarHeader() {
         <LogoLockup size={22} />
       </button>
       <NeedsYouButton convs={convs} />
+      {machines && machines.online < machines.total && (
+        <span className="machines-badge warn" title={`${machines.online}/${machines.total} 台执行机在线——离线机器上的工具调用会等它上线`}>
+          ▷ {machines.online}/{machines.total}
+        </span>
+      )}
+      {machines && machines.online === machines.total && (
+        <span className="machines-badge" title={`${machines.total} 台执行机全部在线`}>
+          ▷ {machines.online}/{machines.total}
+        </span>
+      )}
       <div className="header-btns">
         <button className="btn ghost icon-btn" title="设置" onClick={() => setSettingsOpen(true)}>
           ⚙

@@ -194,6 +194,11 @@ export function attachWs(server: HttpServer, app: Dorahub, audit: AuditLog) {
       const frame: SrvFrame = { t: "conv_read", conv };
       for (const client of clients) send(client.ws, frame);
     },
+    onUnread(conv: string, unread: boolean) {
+      if (!unread) return; // 只广播置位（清除走 conv_read）
+      const frame: SrvFrame = { t: "conv_unread", conv, unread: true };
+      for (const client of clients) send(client.ws, frame);
+    },
     onAttention(conv: string, pending: number) {
       // 广播给所有连接（不要求 attach）：列表页的手机也能实时看到「等你 N」变化
       const frame: SrvFrame = { t: "attention", conv, pending };

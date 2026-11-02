@@ -44,6 +44,15 @@ export function ConversationPage({ id }: { id: string }) {
   const [summaryOpen, setSummaryOpen] = useState(false); // P1-7 会话摘要面板
 
   const refreshExecutors = () => api.executors().then(setExecutors).catch(() => {});
+  // 执行机失联提示（轻量半步）：30s 轮询在线状态；本会话的执行机离线时亮 amber 条
+  useEffect(() => {
+    const t = setInterval(refreshExecutors, 30_000);
+    return () => clearInterval(t);
+  }, []);
+  const envOffline = envId != null && envId !== "hub"
+    && executors.some((e) => e.envId === envId && !e.online)
+    && !executors.every((e) => e.envId !== envId); // 不在列表里 = 注册表没它，不误报
+
   // 首次：HTTP snapshot；随后 WS attach
   useEffect(() => {
     let cancelled = false;
@@ -283,6 +292,16 @@ export function ConversationPage({ id }: { id: string }) {
       )}
 
       {error && <div className="error-banner" onClick={() => setError("")}>{error} ✕</div>}
+
+      {/* 执行机失联提示（失联语义轻量半步，对齐 Sig「机器暂时不在」≠失败）：
+          amber 不红；会话还在、消息照收，只是工具调用会等它上线 */}
+      {envOffline && (
+        <div className="alert-banner alert-offline-env">
+          <span className="alert-icon">◌</span>
+          {envId} 暂时离线——会话不会丢，新消息照常接收；工具调用会等它上线后自动恢复。
+          <button className="btn ghost sm" onClick={refreshExecutors}>刷新状态</button>
+        </div>
+      )}
 
       {state.alert && (
         <div className={`alert-banner alert-${state.alert.kind}`}>

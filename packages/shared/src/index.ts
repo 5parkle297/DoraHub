@@ -151,6 +151,7 @@ export type SrvFrame =
   | { t: "conv_status"; conv: string; status: "running" | "idle" }
   | { t: "conv_meta"; conv: string; name: string; description: string | null; keywords: string[]; envId: string | null }
   | { t: "conv_read"; conv: string } // 未读清除广播（P0-1，所有设备同步）
+  | { t: "conv_unread"; conv: string; unread: true } // 未读置位广播（P1 精进：实时蓝点/title）
   | { t: "attention"; conv: string; pending: number } // 会话等你处理数变化（P0-2，不 attach 也能收到）
   | { t: "conv_stalled"; conv: string; minutes: number | null } // 卡死状态变化（P1-2；null = 恢复，广播给所有连接）
   | { t: "confirmation"; conv: string; confirm: ConfirmationItem }

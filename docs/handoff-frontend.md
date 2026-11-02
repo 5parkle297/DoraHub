@@ -76,7 +76,7 @@
 
 **P1 待办**（下会话，见 reference-sig-analysis.md §4.2）：spec.md 功能需求文档 → 卡死检测 → 今日花费 → 目录浏览器 → 失联语义 → 发送失败重试 → 会话摘要面板。
 
-### ✅ P1 批次进度（2026-11-02，已完成 6/7，未发版）
+### ✅ P1 批次进度（2026-11-02，已完成 6/7 + 精进批次 7 项，未发版）
 
 | 项 | 状态 | 备注 |
 |---|---|---|
@@ -88,7 +88,23 @@
 | P1-7 摘要面板 | ✅ | ⋯菜单「会话详情」：基础信息/描述/关键词/最近一轮；lastReport 服务端派生（handleStreamEvents 数事件，刷新不丢）；p1-summary-ui 9/9 |
 | P1-1 失联语义 | ⏳ 未做 | 工作量最大（per-env 会话状态机 + steer 排队 + 重连对账），留独立会话 |
 
-**P1 新增坑 #35-38**：见 §6。**发现的产品缺口（待拍板）**：手机列表页无新建按钮（「＋」只在桌面 header；手机目前只有零会话空态指引可达新建）——是否给手机 header 加「＋」待用户定。
+### ✅ Sig 对齐精进批次（2026-11-02 第二轮，未发版）
+
+对照分析报告 §3.1/§4.5 清掉的存量差距：
+
+| # | 项 | 内容 |
+|---|---|---|
+| 1 | 标签页标题计数 | 「(◆2 · 3 新) DoraHub」——切 tab 也能看到有事在等；配套新帧 conv_unread（unread 置位实时广播，修复已开列表页蓝点/title 滞后） |
+| 2 | 排队消息自然语言 | InboxBar：「新消息会在本轮结束后处理；插话会在当前工具后生效」（submission id 进 title 提示，不再当正文） |
+| 3 | 执行机全局可见 | 桌面+手机 header「▷ N/N」徽章（全在线灰/离线 amber，30s 轮询） |
+| 4 | 手机「＋」新建 | IA 补口（用户拍板「一并精进」）：新建是驾驶动作不是管理动作，手机 header 加「＋」 |
+| 5 | 会话页离线提示 | 失联语义轻量半步：本会话执行机离线时 amber 条「会话不会丢，工具调用等它上线」+ 刷新按钮 |
+| 6 | 导入场景测试 | p1-import-scenarios.mjs（10 项）：真实文件全链路（归一+warning/envId/幂等/导入后可用性 954 条 entries）；顺手修语义：软删后的重导 = 新会话（findByPiSource 忽略 hidden） |
+| 7 | CONTEXT.md 词汇表 | 统一产品词汇（会话/执行机/确认卡/失联…），代码文档 UI 不各说各话 |
+
+验证：p1-polish-ui 6/6；全套回归（ws-test 15/15、unread/attention/runreport/usage/import/smoke 全过）；slop=0。
+
+**P1 新增坑 #35-40**：见 §6。手机「＋」新建已拍板落地（上表 #4）。
 
 ### 下会话开场 prompt（复制即用）
 
@@ -303,6 +319,8 @@ web/src/
 36. **bash 子 shell 后台进程会被工具会话收割**（11-02 踩）：`(nohup bash dev-server.sh > log 2>&1 &)` 在本环境里 tool 调用结束就死，且无 crash 日志。用 `powershell Start-Process -FilePath 'D:\\EESoftware\\Git\\bin\\bash.exe' -ArgumentList 'dev-server.sh' -WorkingDirectory ... -RedirectStandardOutput ...`（注意 Git Bash 装在 D:/EESoftware，不在 C:/Program Files）
 37. **Windows 保留名文件（nul）炸整个 listDir**（11-02 踩）：workpc 用户目录有历史遗留 nul 垃圾文件，daemon listDir 的 lstat 一碰就 EISDIR，整个目录列不了。兑底：shell `ls -A -F`（对 nul 免疫），见 http-api.ts browse。根治：去 workpc 删掉 `C:\\Users\\shiyu\\nul`（`rm '\\\\.\\nul'` 或 del '\\\\?\\C:\\Users\\shiyu\\nul'）
 38. **探测缓存 60s 新鲜窗口 ≠ 机器真离线**（11-02 踩）：browse 前置 lastSeen 检查会在机器刚上线但探测缓存过期时误拒（502 offline）。交互代价小（用户重试即通，重试时后台探测已刷新），但要知道这个边界。执行机探测 5s 超时+30s 节流，离线机探测要分钟级
+39. **unread 变化原本无广播帧**（11-02 发现）：已开着的列表页蓝点/标题计数要等下次全量刷新才更新——补 conv_unread 帧（置位侧广播，清除侧 conv_read 已有）。新状态上屏时问一句：这个状态变化有没有对应帧？没有就是下一个同步 bug
+40. **软删的导入会话仍算 existing**（11-02 修）：findByPiSource 原来不查 hidden，用户删了导入会话再导同文件 → 幂等命中一个看不见的会话，像 bug。语义修正：软删后的重导 = 新会话（hidden 不参与幂等索引）
 
 ## 7. 验收基线（重设计改完必须仍然全过）
 

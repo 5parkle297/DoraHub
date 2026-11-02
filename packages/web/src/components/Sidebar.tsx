@@ -111,6 +111,16 @@ function ConversationsInner() {
         } else if (f.t === "conv_read") {
           // 另一设备标记已读 → 同步清除本设备的 unread 点（P0-1）
           setConvs((cs) => cs.map((c) => (c.id === f.conv ? { ...c, unread: false } : c)));
+        } else if (f.t === "conv_unread") {
+          // 无人看的会话有新动静（P1 精进）：实时亮蓝点/标题计数。
+          // 不在列表里的（新建空会话首次发言）→ 补拉全量让它出现。
+          setConvs((cs) => {
+            if (cs.some((c) => c.id === f.conv)) {
+              return cs.map((c) => (c.id === f.conv ? { ...c, unread: true } : c));
+            }
+            refresh();
+            return cs;
+          });
         } else if (f.t === "attention") {
           // 等你处理数变化（不 attach 也能收到，P0-2）
           setConvs((cs) => cs.map((c) => (c.id === f.conv ? { ...c, pendingConfirms: f.pending } : c)));
@@ -144,6 +154,17 @@ function ConversationsInner() {
   //   ③ 空闲—— 保持项目分组（cwd 为 key），组内按 updatedAt 倒序
   // 等你/运行中的会话平铺不分组（通常只有几个，带项目徽章补上下文）；
   // 未读点（unread）在 ConvCard 内渲染。
+  // 标签页标题计数（对齐 Sig 三层未读表达之三）：「(◆2 · 3 新) DoraHub」。
+  // 切到别的 tab 也能看到有没有事在等你/有新动静。
+  useEffect(() => {
+    const n = convs.filter((c) => c.unread).length;
+    const waiting = convs.filter((c) => c.pendingConfirms > 0).length;
+    const parts: string[] = [];
+    if (waiting > 0) parts.push(`◆${waiting}`);
+    if (n > 0) parts.push(`${n} 新`);
+    document.title = parts.length > 0 ? `(${parts.join(" · ")}) DoraHub` : "DoraHub";
+  }, [convs]);
+
   // P0-1 问题 A：没发过消息的空会话（无自动标题且无预览）不进列表，
   // 防误触创建产生噪声；发首条消息后 conv_meta 推送会实时出现。
   const visible = useMemo(() => convs.filter((c) => c.name || c.lastPreview), [convs]);

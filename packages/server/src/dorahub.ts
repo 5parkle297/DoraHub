@@ -34,6 +34,8 @@ export interface DorahubEvents {
   onConfirmationResolved(conv: string, id: string, approved: boolean): void;
   /** 未读清除（某设备 markRead 后广播，所有设备同步，P0-1） */
   onRead(conv: string): void;
+  /** 未读置位广播（P1 精进：列表页蓝点/标题计数实时，不用等刷新） */
+  onUnread(conv: string, unread: boolean): void;
   /** 会话等你处理数变化（确认队列增减，P0-2——不 attach 该会话的设备也要收到） */
   onAttention(conv: string, pending: number): void;
   /** 卡死状态变化（P1-2）：minutes 非 null = 进入卡死；null = 恢复 */
@@ -84,7 +86,9 @@ export class Dorahub {
 
   findByPiSource(key: string): string | null {
     for (const [id, rec] of this.convs) {
-      if (rec.sourcePiKey === key) return id;
+      // 软删（hidden）不算存在：用户删过又重导 = 要它回来，新建一份。
+      // （durable 数据都在，老的那份历史仍在库里，只是列表不可见。）
+      if (rec.sourcePiKey === key && !rec.meta.hidden) return id;
     }
     return null;
   }
@@ -636,6 +640,9 @@ export class Dorahub {
       );
       if (hasAssistantActivity && rec.pending.size === 0 && !rec.unread) {
         rec.unread = true;
+        // 广播（对齐 conv_read 的对称帧）：已开着的列表页/标题计数实时更新，
+        // 不用等下次刷新——否则另一个设备的蓝点/title 滞后。
+        this.events.onUnread(id, true);
       }
       if (userAppended) this.namer.maybeName(rec.conv);
     }
