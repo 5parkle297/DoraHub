@@ -43,6 +43,7 @@
 ### ✅ 历史已修（保留索引，详情见 git 历史）
 
 - **手机同步四连修（2026-10-26）**：b472d22（双扇出/attach 竞态/EventGate 闸门）+ cebeedd（pi 导入渠道映射 no_model）+ 46d840d（thinkingLevel 丢失致智谱 1210 model_error）——详见 §6 #28-33 与 git 历史。存量 conv 294/1053 已手工修复
+- **P0 批次抽验（2026-10-29）**：全套复跑通过（ws-test 15/15 + p0 七脚本），验收状态属实；新发现坑 #34——p0-ui-* 脚本不能并行跑（共享 preview+调试浏览器互踩，假失败）；中途崩溃会残留 pending 确认卡，下次跑前先 GET /api/confirmations 清残留
 - **P0-1（be929eb）**：空壳会话治理（新建两步确认+成功关弹窗+空会话不进列表+conv_meta 补拉 upsert）；pi 扫描按机分组
 - **P0-2 #1（5c34ba2）**：pi 会话入侧栏常驻（自动扫描+时间窗 3天/3-7天每机每档 3 条+更多弹窗全量）；设置改三页签
 - **P0-2 #2（77e0779）**：设备标识色三机三色（hub 墨灰/workpc 靖蓝/laptop 琥珀；envId 哈希分配+CSS 变量架构；AA 全过）
@@ -283,6 +284,7 @@ web/src/
 31. **浏览器 E2E 测试里 evaluateOnNewDocument 劫持 WebSocket 会半失败**（10-26 踩）：extends 子类覆盖 constructor 后 addEventListener 的 message 事件可能不触发（收到 undefined 帧），观测 WS 帧用 CDP `Network.webSocketFrameSent/Received` 才可靠（e2e-final.mjs 的做法）
 32. **puppeteer emulateMediaType("dark") 已废弃**：用 `page.emulateMediaFeatures([{ name: "prefers-color-scheme", value: "dark" }])`，深色截图用这个
 33. **测试脚本里的 `wait()` 若接收的是数组快照（filter/map 结果），后续新增帧不会出现**（10-26 踩）：wait 轮询的必须是原始可变数组引用，或每次轮询重新 filter。场景3 误报“零投递”就是这么来的
+34. **p0-ui-* 脚本不能并行跑**（10-29 验收踩）：它们共享同一个 preview(4399) + 9222 调试浏览器，并行会互改视口/互点按钮，出现假失败（如「手机无设置齿轮」误挂）；且中途崩溃的 waiting-e2e 会残留 pending 确认卡污染「等你」区（1839 事件），下次先 `GET /api/confirmations` 清残留再跑
 
 ## 7. 验收基线（重设计改完必须仍然全过）
 
