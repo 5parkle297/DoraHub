@@ -864,6 +864,25 @@ a { color: var(--blue); }
 .usage-model-name { color: var(--text-dim); }
 .usage-model-meta { color: var(--text-faint); flex: none; }
 
+/* 目录浏览器（P1-4）：新建弹窗内嵌面板 */
+.dir-browser { margin-top: 10px; border: 1px solid var(--line); border-radius: var(--r-md); overflow: hidden; }
+.dir-crumbs { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-bottom: 1px solid var(--line); background: var(--bg-raised); flex-wrap: wrap; }
+.crumb-path { display: flex; align-items: center; flex-wrap: wrap; gap: 0; min-width: 0; flex: 1; font-size: var(--fs-xs); }
+.crumb-wrap { display: inline-flex; align-items: center; }
+.crumb { border: none; background: none; padding: 2px 4px; color: var(--text-dim); font-family: var(--mono); font-size: var(--fs-xs); cursor: pointer; border-radius: var(--r-sm); }
+.crumb:hover { background: var(--bg-hover); color: var(--text); }
+.crumb-sep { color: var(--text-faint); }
+.dir-list { max-height: 240px; overflow-y: auto; padding: 4px; }
+.dir-item { display: flex; align-items: center; gap: 6px; width: 100%; text-align: left; padding: 5px 8px; border: none; background: none; border-radius: var(--r-sm); color: var(--text); font-size: var(--fs-sm); font-family: var(--mono); cursor: pointer; }
+.dir-item:hover { background: var(--bg-hover); }
+.dir-item.file { color: var(--text-faint); cursor: default; }
+.dir-item.file:hover { background: none; }
+.dir-icon { color: var(--blue); flex: none; }
+.dir-item.file .dir-icon { color: var(--text-faint); }
+.dir-msg { padding: 12px; color: var(--text-faint); font-size: var(--fs-sm); text-align: center; }
+.dir-msg.error { color: var(--yellow); }
+.dir-actions { padding: 8px; border-top: 1px solid var(--line); display: flex; justify-content: flex-end; }
+
 /* ---- 桌面空态 ---- */
 .welcome-pane {
   flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;

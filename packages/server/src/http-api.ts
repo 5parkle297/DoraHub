@@ -8,6 +8,7 @@ import type { AuditLog } from "./audit.ts";
 import type { ExecRegistry } from "./exec/registry.ts";
 import type { ChannelConfig } from "./channels.ts";
 import { usageToday } from "./usage-day.ts";
+import { context } from "./harness.ts";
 
 export interface HttpApiDeps {
   app: Dorahub;
@@ -286,6 +287,80 @@ export function createRouter(deps: HttpApiDeps) {
         { envId: "hub", host: "local", defaultCwd: process.cwd(), online: true, lastSeen: Date.now() },
         ...probed,
       ]);
+    }
+
+    // ---------- 目录浏览（P1-4：新建会话选 cwd 时浏览执行机文件系统）----------
+    const browseMatch = path.match(/^\/api\/executors\/([^/]+)\/browse$/);
+    if (browseMatch && method === "GET") {
+      const envId = decodeURIComponent(browseMatch[1]);
+      const url = new URL(req.url ?? "/", "http://x");
+      const dirPath = url.searchParams.get("path");
+      if (!deps.execRegistry) return err(res, 500, "no_executors", "executor registry unavailable");
+      // 秒拒已知离线的机器（探测缓存 60s 新鲜窗口）：离线机 SSH 建连要分钟级，
+      // 交互式浏览等不了（P1-4，10-29 实测 laptop 离线要 27s 才失败）。
+      // 注：探测缓存只看 lastSeen 新鲜度，机器可能实际已上线——用户刷新重试即可。
+      const lastSeen = deps.execRegistry.lastSeenOf(envId);
+      if (envId !== "hub" && (lastSeen == null || Date.now() - lastSeen > 60_000)) {
+        // 后台触发一次探测刷新缓存（下次就秒回）
+        deps.execRegistry.probe(envId).catch(() => {});
+        return json(res, 502, { error: { code: "offline", message: `${envId} 当前离线或状态未知——开机并连上 Tailscale 后重试` } });
+      }
+      const env = await deps.execRegistry.buildForEnv(envId, dirPath ?? null).catch(() => null);
+      if (!env) return err(res, 502, "offline", `executor ${envId} 不可用（可能离线）`);
+      // 无 path → 列默认 cwd（远程机 = home，hub = 服务 cwd）
+      const target = dirPath ?? (env as any).cwd ?? "/";
+      let items: { name: string; kind: "directory" | "file"; size: number | null }[];
+      // 离线机器的 SSH 调用会挂到分钟级——浏览是交互式操作，12s 封顶友好失败。
+      // 注意：race 输后悬空定时器的 reject 必须吞掉，否则 unhandledRejection 杀进程（10-29 实踩）。
+      let r: any = null;
+      try {
+        r = await new Promise((resolve, reject) => {
+          let done = false;
+          const t = setTimeout(() => { if (!done) reject(new Error("读取超时（机器可能离线）")); }, 12_000);
+          env.listDir(target, context).then(
+            (v: any) => { done = true; clearTimeout(t); resolve(v); },
+            (e: any) => { done = true; clearTimeout(t); reject(e); },
+          );
+        });
+      } catch (e: any) {
+        return json(res, 502, { error: { code: "list_failed", message: e?.message ?? "读取失败（机器可能离线）" } });
+      }
+      if (r && r.ok) {
+        items = (r.value as any[])
+          .filter((f) => f.kind === "directory" || f.kind === "file")
+          .sort((a, b) => (a.kind === b.kind ? String(a.name).localeCompare(String(b.name)) : a.kind === "directory" ? -1 : 1))
+          .slice(0, 500)
+          .map((f) => ({ name: String(f.name), kind: f.kind as "directory" | "file", size: typeof f.size === "number" ? f.size : null }));
+      } else {
+        // 兑底：Windows 保留名文件（nul 等）会让 lstat 炸掉整个 listDir（10-29 实踩）；
+        // 改用 shell ls 逐条列（对 nul 免疫）。同样 12s 封顶。失败才真正报错。
+        try {
+          let out = "";
+          const quoted = JSON.stringify(target).slice(1, -1); // JSON 转义近似 shell 双引号安全
+          const er = await new Promise((resolve, reject) => {
+            let done = false;
+            const t = setTimeout(() => { if (!done) reject(new Error("timeout")); }, 12_000);
+            env.exec(
+              `ls -A -F --quoting-style=literal "${quoted}" 2>/dev/null | head -500`,
+              { onOutput: (t2) => { out += t2; } }, context as any,
+            ).then(
+              (v: any) => { done = true; clearTimeout(t); resolve(v); },
+              (e: any) => { done = true; clearTimeout(t); reject(e); },
+            );
+          }) as any;
+          if (!er || !er.ok) throw new Error("exec failed");
+          items = out.split("\n").filter(Boolean).map((line) => {
+            const isDir = line.endsWith("/");
+            const name = isDir ? line.slice(0, -1) : line;
+            // ls -F 还会给可执行加 *、符号链接加 @、套接字加 =——都不算目录
+            const clean = name.replace(/[*@=|]$/, "");
+            return { name: clean, kind: (isDir ? "directory" : "file") as "directory" | "file", size: null };
+          });
+        } catch {
+          return json(res, 502, { error: { code: "list_failed", message: (r && r.error?.message) ? String(r.error.message) : "读取超时或机器离线" } });
+        }
+      }
+      return json(res, 200, { path: target, items });
     }
 
     return err(res, 404, "not_found", `no route ${method} ${path}`);

@@ -51,6 +51,12 @@ export interface UsageToday {
   totals: ModelUsageToday & { activeConvs: number };
 }
 
+/** /api/executors/:env/browse 返回（P1-4 目录浏览器） */
+export interface BrowseResult {
+  path: string;
+  items: { name: string; kind: "directory" | "file"; size: number | null }[];
+}
+
 export interface CreateConversationRequest {
   name?: string;
   cwd?: string;

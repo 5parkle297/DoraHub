@@ -166,7 +166,7 @@ export class ExecRegistry {
     let resolvedCwd = cwd || cfg.defaultCwd;
     if (cwd === null) {
       try {
-        const info = await conn.info();
+        const info = await withTimeout(conn.info(), 15_000, `executor ${envId} info timeout`);
         resolvedCwd = info.home;
       } catch { /* 用 defaultCwd */ }
     }
@@ -194,4 +194,15 @@ export class ExecRegistry {
     }
     this.connections.clear();
   }
+}
+
+/** 竞速超时（P1-4）：离线机器的 SSH 连接要分钟级才失败，交互式浏览等不了。 */
+function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error(label)), ms);
+    p.then(
+      (v) => { clearTimeout(t); resolve(v); },
+      (e) => { clearTimeout(t); reject(e); },
+    );
+  });
 }
